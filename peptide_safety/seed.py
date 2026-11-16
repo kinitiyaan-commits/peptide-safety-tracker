@@ -103,7 +103,7 @@ CATALOG_ROWS = [
         "MedlinePlus: used for excess abdominal fat in adults with "
         "HIV-associated lipodystrophy; the reference specifically says it is "
         "not used for weight loss. Approval applies to those specific products "
-        "and indications only. Verify on DailyMed.",
+        "and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
         "https://medlineplus.gov/druginfo/meds/a611035.html",
         "verified", "medlineplus",
     ),
@@ -124,7 +124,7 @@ CATALOG_ROWS = [
         "fda-approved",
         "Approved products exist for this ingredient (e.g., Vyleesi) with a "
         "labeled indication for specific patients. Approval applies to those "
-        "specific products and indications only. Verify on DailyMed.",
+        "specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
         "https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=bremelanotide",
         "verified", "dailymed",
     ),
@@ -148,7 +148,7 @@ CATALOG_ROWS = [
         "Approved products exist for this ingredient (e.g., Trulicity). "
         "MedlinePlus covers type 2 diabetes and cardiovascular-risk reduction "
         "in specified populations. Approval applies to those specific products "
-        "and indications only. Verify on DailyMed.",
+        "and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
         "https://medlineplus.gov/druginfo/meds/a614047.html",
         "verified", "medlineplus",
     ),
@@ -159,7 +159,7 @@ CATALOG_ROWS = [
         "Approved products exist for this ingredient (e.g., Forteo). "
         "MedlinePlus: an osteoporosis treatment — not a general height-growth "
         "entry. Approval applies to those specific products and indications "
-        "only. Verify on DailyMed.",
+        "only. Check approval in Drugs@FDA; labeling on DailyMed.",
         "https://medlineplus.gov/druginfo/meds/a603018.html",
         "verified", "medlineplus",
     ),
@@ -171,7 +171,7 @@ CATALOG_ROWS = [
         "MedlinePlus: an osteoporosis treatment; bone-treatment information "
         "must not be extrapolated into claims about height or appearance. "
         "Approval applies to those specific products and indications only. "
-        "Verify on DailyMed.",
+        "Check approval in Drugs@FDA; labeling on DailyMed.",
         "https://medlineplus.gov/druginfo/meds/a617038.html",
         "verified", "medlineplus",
     ),
