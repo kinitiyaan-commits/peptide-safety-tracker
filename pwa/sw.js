@@ -6,7 +6,7 @@
  * (see tests/test_pwa.py — no fetch() of user data is allowed in the app).
  */
 
-const CACHE = "peptide-safety-static-v1";
+const CACHE = "peptide-safety-static-v3";
 const ASSETS = [
   "./",
   "./index.html",

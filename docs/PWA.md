@@ -88,6 +88,44 @@ environment: install prompt behavior, standalone display, safe-area
 layout, iOS quirks, and real offline launch still need a manual check on
 an Android/iOS device.
 
+## Beta backlog "Now" slice (2026-11-15, branch `feature/beta-now`)
+
+Implemented against this PWA (the deployed app) and browser-verified:
+
+- **Explicit units:** new products start at "Choose unit"; saving without
+  a unit is blocked; the last confirmed unit per product **per profile**
+  is remembered (new `productUnits` store, DB v2) and shown with a
+  confirmation hint; changing products never carries over a unit.
+- **Repeat logging:** "Log again" on any dose (Today + History) opens a
+  reviewable pre-filled form — time set to now, notes never copied,
+  review warning shown before saving.
+- **Repeated taps:** submit buttons are guarded — one deliberate save
+  creates one record (browser-verified with concurrent double submits).
+- **Data preservation:** DB v1→v2 upgrade verified against a populated
+  installation (8 stores, zero loss); upgrades only create missing
+  stores, never delete; "Update available" banner is manual-reload only
+  so an unfinished form can never be interrupted; CACHE version bumped
+  so installed clients refresh.
+- **Backup:** export records the last successful backup time; a
+  dismissible reminder appears when there is no backup or the last one is
+  ≥7 days old (dismissal lasts a week).
+- **Understandability:** version identifier in Settings; install help per
+  platform with offline limitations; feedback section warning testers not
+  to include medical records or identifying details (the app never
+  attaches data to anything automatically).
+- **Timeline:** date-range filters (from/to) added to History alongside
+  text and type filters.
+- **Appointment summary (standout):** date-range picker, live preview of
+  exactly what will be shared, private notes excluded by default with an
+  explicit opt-in, user-written questions included, print/download
+  self-serve (nothing is sent anywhere), labeled as user-entered and
+  possibly incomplete with no cause/effect claims.
+
+Regression tests for all of the above live in `tests/test_pwa.py`
+(classes `TestExplicitUnits`, `TestRepeatLogging`, `TestDataPreservation`,
+`TestInstallAccessibilityFeedback`, `TestCombinedTimeline`,
+`TestAppointmentSummary`).
+
 ## Regenerating static data
 
 After editing the catalog or goals in the Python seed:

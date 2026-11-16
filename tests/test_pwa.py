@@ -177,3 +177,170 @@ class TestAppRequirements:
             text = (PWA / name).read_text().lower()
             for marker in ("tiyaan", "jordan", "kinitiyaan", "/home/", "c:\\\\"):
                 assert marker not in text
+
+
+# ------------------------------------- beta backlog "Now" (2026-11-15) ----
+
+class TestExplicitUnits:
+    """Backlog 'Now': new products start with 'Choose unit', remembered unit
+    per product+profile shown before saving, no unrelated unit carry-over."""
+
+    def _app(self):
+        return (PWA / "app.js").read_text()
+
+    def _html(self):
+        return (PWA / "index.html").read_text()
+
+    def test_unit_select_starts_empty(self):
+        html = self._html()
+        assert '<option value="">Choose unit</option>' in html
+        # no silent default: the first visible option is not a unit
+        select = html.split('id="u-unit"', 1)[1].split("</select>", 1)[0]
+        first = select.split("<option", 2)[1]
+        assert 'value=""' in first
+
+    def test_save_blocked_without_unit(self):
+        app = self._app()
+        assert '"Choose a unit' in app
+
+    def test_remembered_unit_per_profile(self):
+        store = (PWA / "store.js").read_text()
+        assert '"productUnits"' in store
+        assert "rememberedUnit" in store and "rememberUnit" in store
+        # keyed per profile — never inherited across profiles
+        assert 'profileId + "|" + String(name).toLowerCase()' in store
+
+    def test_no_unit_carry_over_on_product_change(self):
+        app = self._app()
+        assert "onProductChanged" in app
+        body = app.split("async function onProductChanged", 1)[1].split("\n}", 1)[0]
+        assert '$("#u-unit").value = ""' in body
+
+    def test_amount_and_unit_stay_together(self):
+        app = self._app()
+        # history renders amount and unit as one pair
+        assert "${esc(u.amount)} ${esc(u.unit)}" in app
+        assert "esc(u.unit)" in app
+
+
+class TestRepeatLogging:
+    def test_log_again_opens_reviewable_form(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function logAgain", 1)[1].split("\nfunction ", 1)[0]
+        assert 'openLogSheet(null)' in body          # opens a form
+        assert 'localDT()' in body                   # new time = now
+        assert '$("#u-notes").value = ""' in body    # notes not copied
+        assert "Review before saving" in app
+
+    def test_repeated_taps_guarded(self):
+        app = (PWA / "app.js").read_text()
+        assert "guardBusy" in app
+        for fn in ("logUsage", "logSymptom", "logObservation"):
+            seg = app.split(f"async function {fn}", 1)[1].split("\nasync function ", 1)[0]
+            assert "guardBusy" in seg, f"{fn} has no repeated-tap guard"
+
+
+class TestDataPreservation:
+    def test_db_upgrade_only_creates_stores(self):
+        store = (PWA / "store.js").read_text()
+        assert "Data-preserving upgrade" in store
+        assert "createObjectStore" in store
+        assert "deleteObjectStore" not in store
+        upgrade = store.split("req.onupgradeneeded", 1)[1].split("req.onsuccess", 1)[0]
+        assert "deleteDatabase" not in upgrade and ".clear(" not in upgrade
+
+    def test_update_prompt_never_auto_reloads(self):
+        app = (PWA / "app.js").read_text()
+        assert "update-banner" in app
+        assert "updatefound" in app
+        # the only location.reload() lives in the explicit user button handler
+        assert app.count("location.reload()") == 1
+        body = app.split("function applyUpdate", 1)[1].split("\n}", 1)[0]
+        assert "location.reload()" in body
+
+    def test_import_leaves_data_intact_on_failure(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function importFile", 1)[1].split("\nasync function runImport", 1)[0]
+        # validation happens before anything is written
+        assert "showImportPreview" in body
+        assert "Store.put" not in body
+
+    def test_backup_time_and_dismissible_reminder(self):
+        app = (PWA / "app.js").read_text()
+        assert 'setMeta("lastBackupAt"' in app
+        assert "backupReminderDismissedAt" in app
+        html = (PWA / "index.html").read_text()
+        assert 'id="last-backup"' in html
+        assert 'id="backup-reminder"' in html
+
+
+class TestInstallAccessibilityFeedback:
+    def test_version_identifier_in_settings(self):
+        html = (PWA / "index.html").read_text()
+        assert 'id="app-version"' in html
+        app = (PWA / "app.js").read_text()
+        assert "APP_VERSION" in app
+
+    def test_install_help_and_offline_limits(self):
+        html = (PWA / "index.html").read_text()
+        settings = html.split('id="sec-settings"', 1)[1].split("</section>", 1)[0]
+        assert "Add to Home" in settings
+        assert "Offline limitations" in settings
+
+    def test_feedback_route_warns_against_health_data(self):
+        html = (PNA := PWA / "index.html").read_text()
+        settings = html.split('id="sec-settings"', 1)[1].split("</section>", 1)[0]
+        assert "Feedback" in settings
+        assert "do <strong>not</strong> include medical records" in settings
+        assert "never attaches data to feedback automatically" in settings
+
+    def test_no_auto_attachment_anywhere(self):
+        app = (PWA / "app.js").read_text()
+        # nothing in the app sends data anywhere — no fetch, no beacon, no sendBeacon
+        assert "sendBeacon" not in app
+        assert "navigator.send" not in app
+
+
+class TestCombinedTimeline:
+    def test_history_filters_include_date_range(self):
+        html = (PWA / "index.html").read_text()
+        assert 'id="hist-from"' in html and 'id="hist-to"' in html
+        app = (PWA / "app.js").read_text()
+        body = app.split("function renderHistory", 1)[1].split("\n// ------", 1)[0]
+        assert "inRange" in body
+
+    def test_missing_data_wording_neutral(self):
+        app = (PWA / "app.js").read_text()
+        assert "No matching entries" in app
+        assert "Nothing logged yet" in app
+
+
+class TestAppointmentSummary:
+    def _app(self):
+        return (PWA / "app.js").read_text()
+
+    def test_summary_exists_with_date_range_and_preview(self):
+        app = self._app()
+        html = (PWA / "index.html").read_text()
+        for token in ("openSummarySheet", "renderSummaryPreview", "sum-from",
+                      "sum-to", "sum-preview", "printSummary", "downloadSummary"):
+            assert token in app or token in html, f"missing {token}"
+        assert 'id="summary-sheet"' in html
+
+    def test_private_notes_excluded_by_default(self):
+        html = (PWA / "index.html").read_text()
+        sheet = html.split('id="summary-sheet"', 1)[1].split("</div>\n\n<div id=\"toast\"", 1)[0]
+        assert 'id="sum-notes"' in sheet and "checked" not in sheet.split("id=\"sum-notes\"")[1].split(">", 1)[0]
+        assert "excluded by default" in sheet
+
+    def test_labeled_user_entered_no_claims(self):
+        app = self._app()
+        assert "not medical advice" in app
+        assert "cause, effect, or treatment effectiveness" in app
+        assert "recorded during this period" in app
+
+    def test_nothing_sent_automatically(self):
+        app = self._app()
+        body = app.split("function printSummary", 1)[1].split("\nfunction downloadSummary", 1)[0]
+        assert "window.open" in body          # user-initiated print only
+        assert "fetch(" not in body and "sendBeacon" not in body

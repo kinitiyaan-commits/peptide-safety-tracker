@@ -37,6 +37,11 @@
   </div>
 </header>
 <div id="offline-badge" class="hidden bg-amber-900/60 text-amber-200 text-xs text-center py-1.5 px-4">Offline — the app still works; your data is on this device.</div>
+<div id="update-banner" class="hidden bg-emerald-950/60 text-emerald-200 text-xs py-2 px-4 flex items-center justify-center gap-3 flex-wrap text-center">
+  <p>Update available — reload whenever you're not in the middle of logging. Your records are not affected.</p>
+  <button onclick="applyUpdate()" class="text-xs font-bold text-white bg-emerald-700 rounded-lg px-3 py-1">Reload &amp; update</button>
+  <button onclick="dismissUpdate()" class="text-xs underline">Not now</button>
+</div>
 
 <main class="max-w-3xl mx-auto p-4 space-y-6">
 
@@ -74,16 +79,25 @@
   <section id="sec-history" class="hidden space-y-4">
     <div class="card p-6 space-y-4">
       <h2 class="text-2xl font-black">History</h2>
-      <div class="flex gap-2">
-        <input id="hist-q" class="inp" placeholder="Filter by text…">
-        <select id="hist-type" class="inp !w-36">
+      <div class="flex gap-2 flex-wrap">
+        <input id="hist-q" class="inp !w-auto flex-1 min-w-[8rem]" placeholder="Filter by product or text…">
+        <select id="hist-type" class="inp !w-auto">
           <option value="all">All events</option>
           <option value="dose">Doses</option>
           <option value="symptom">Symptoms</option>
           <option value="observation">Observations</option>
         </select>
       </div>
+      <div class="flex gap-2 flex-wrap items-center">
+        <label class="text-xs text-slate-400" for="hist-from">From</label>
+        <input id="hist-from" type="date" class="inp !w-auto">
+        <label class="text-xs text-slate-400" for="hist-to">to</label>
+        <input id="hist-to" type="date" class="inp !w-auto">
+        <button onclick="clearDateFilter()" class="text-xs text-slate-400 underline">Clear dates</button>
+      </div>
       <div id="history-list" class="space-y-2"></div>
+      <button onclick="openSummarySheet()" class="btn2 w-full !py-2.5 text-sm">Prepare appointment summary →</button>
+      <p class="text-xs text-slate-500">Choose a date range, review exactly what is included (private notes excluded by default), then print or download. Nothing is sent anywhere.</p>
     </div>
   </section>
 
@@ -111,7 +125,7 @@
   <!-- SETTINGS -->
   <section id="sec-settings" class="hidden space-y-4">
     <div class="card p-6 space-y-4">
-      <h2 class="text-2xl font-black">Settings</h2>
+      <h2 class="text-2xl font-black">Settings <span id="app-version" class="text-xs text-slate-500 font-normal"></span></h2>
 
       <div class="space-y-2">
         <h3 class="font-bold text-emerald-300">Profiles</h3>
@@ -150,13 +164,34 @@
 
       <div class="space-y-2">
         <h3 class="font-bold text-emerald-300">Export &amp; restore</h3>
-        <p class="text-xs text-slate-400">Export saves a JSON backup of <strong>every profile</strong> on this device. Keep the file private — it contains your health journal.</p>
-        <button onclick="exportData()" class="btn"><span>Download full export (JSON)</span></button>
+        <p id="last-backup" class="text-xs text-emerald-300"></p>
+        <p id="backup-reminder" class="hidden text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2"></p>
+        <button onclick="dismissBackupReminder()" id="backup-dismiss" class="hidden text-xs text-slate-400 underline">Dismiss reminder for a week</button>
+        <p class="text-xs text-slate-400">Backup saves a JSON copy of <strong>every profile</strong> on this device. Keep the file private — it contains your health journal.</p>
+        <button onclick="exportData()" class="btn"><span>Download full backup (JSON)</span></button>
         <div class="space-y-2">
           <label class="text-xs text-slate-400 block">Import / restore a previously exported file:</label>
           <input id="import-file" type="file" accept="application/json,.json" class="text-xs text-slate-400">
           <div id="import-preview" class="hidden"></div>
         </div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Install on this device</h3>
+        <details class="text-xs text-slate-400"><summary class="underline">How to install — Learn more</summary>
+          <ul class="list-disc pl-4 pt-1 space-y-1 leading-relaxed">
+            <li><strong>Android (Chrome):</strong> browser menu → <em>Add to Home screen</em> / <em>Install app</em>.</li>
+            <li><strong>iPhone/iPad (Safari):</strong> Share button → <em>Add to Home Screen</em>.</li>
+            <li><strong>Desktop (Chrome/Edge):</strong> install icon in the address bar, or menu → <em>Install app</em>.</li>
+          </ul>
+          <p class="pt-1 leading-relaxed"><strong>Offline limitations:</strong> once installed, the app opens and works with no connection — records are on the device. Reminders still only appear while the app is open. Updates are fetched when you're next online (you'll see an "Update available" note; reloading applies it without touching your records).</p>
+        </details>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Feedback &amp; problems</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">Tell the developer what got stuck, what you expected, and what felt unnecessary — in whatever channel you normally reach them (this app has no built-in sending and never transmits anything).</p>
+        <p class="text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Privacy warning:</strong> when giving feedback, do <strong>not</strong> include medical records, symptom details, product names tied to you, exports, or screenshots of your entries. The app never attaches data to feedback automatically — there is no such feature — so anything you share is only what you type yourself.</p>
       </div>
 
       <div class="space-y-2">
@@ -197,7 +232,8 @@
         <div><label class="block text-xs text-slate-400 mb-1">Amount</label>
           <input id="u-amount" type="number" step="any" min="0" class="inp" inputmode="decimal"></div>
         <div><label class="block text-xs text-slate-400 mb-1">Unit</label>
-          <select id="u-unit" class="inp"><option>mcg</option><option>mg</option><option>IU</option><option>units</option><option>mL</option></select></div>
+          <select id="u-unit" class="inp"><option value="">Choose unit</option><option>mcg</option><option>mg</option><option>IU</option><option>units</option><option>mL</option></select>
+          <p id="u-unit-hint" class="hidden text-[.7rem] text-emerald-300 pt-0.5"></p></div>
       </div>
       <div><label class="block text-xs text-slate-400 mb-1">When</label>
         <input id="u-when" type="datetime-local" class="inp"></div>
@@ -245,6 +281,36 @@
       <div class="err" id="o-error"></div>
       <button class="btn w-full !py-3">Save observation</button>
     </form>
+  </div>
+</div>
+
+<!-- APPOINTMENT SUMMARY -->
+<div id="summary-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeSummarySheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3">
+    <div class="flex justify-between items-center pb-1">
+      <h3 class="font-bold">Appointment summary</h3>
+      <button onclick="closeSummarySheet()" class="text-slate-400 text-xl" aria-label="Close summary">×</button>
+    </div>
+    <p class="text-xs text-slate-400">Pick the period, review <strong>exactly</strong> what will be shared, then print or download it yourself. Nothing is sent anywhere automatically.</p>
+    <div class="flex gap-2 items-center flex-wrap">
+      <label class="text-xs text-slate-400" for="sum-from">From</label>
+      <input id="sum-from" type="date" class="inp !w-auto" onchange="renderSummaryPreview()">
+      <label class="text-xs text-slate-400" for="sum-to">to</label>
+      <input id="sum-to" type="date" class="inp !w-auto" onchange="renderSummaryPreview()">
+    </div>
+    <label class="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+      <input id="sum-notes" type="checkbox" class="mt-1 w-4 h-4 accent-emerald-500" onchange="renderSummaryPreview()">
+      <span>Include private notes <span class="text-xs text-slate-500">(excluded by default)</span></span>
+    </label>
+    <div>
+      <label class="block text-xs text-slate-400 mb-1" for="sum-questions">Questions I want to ask my clinician (optional, your words)</label>
+      <textarea id="sum-questions" rows="3" class="inp" maxlength="2000" oninput="renderSummaryPreview()"></textarea>
+    </div>
+    <div id="sum-preview"></div>
+    <div class="flex gap-2">
+      <button onclick="printSummary()" class="btn flex-1 !py-2.5 text-sm">Print</button>
+      <button onclick="downloadSummary()" class="btn2 flex-1 !py-2.5 text-sm">Download (.html)</button>
+    </div>
   </div>
 </div>
 

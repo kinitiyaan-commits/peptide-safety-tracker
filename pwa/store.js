@@ -14,10 +14,13 @@
  */
 
 const DB_NAME = "peptide-safety-tracker";
-const DB_VERSION = 1;
+// v2 adds "productUnits" (remembered last-confirmed unit per product).
+// The upgrade path below only CREATES missing stores — it never deletes or
+// clears anything, so records from any previous release survive updates.
+const DB_VERSION = 2;
 
 const STORES = ["profiles", "usage", "symptoms", "observations",
-                "reminders", "goals", "meta"];
+                "reminders", "goals", "meta", "productUnits"];
 
 let _dbPromise = null;
 
@@ -27,10 +30,14 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      // Data-preserving upgrade: create any store this release needs that an
+      // older installation is missing. Never delete or clear existing stores
+      // here — a tester's records must survive every update.
       for (const name of STORES) {
         if (!db.objectStoreNames.contains(name)) {
           const os = db.createObjectStore(name, { keyPath: "id" });
-          if (name !== "profiles" && name !== "goals" && name !== "meta") {
+          if (name !== "profiles" && name !== "goals" && name !== "meta" &&
+              name !== "productUnits") {
             os.createIndex("profileId", "profileId", { unique: false });
           }
         }
@@ -105,6 +112,10 @@ const Store = {
       for (const r of rows) await this.delete(store, r.id);
     }
     await this.delete("goals", profileId);
+    // also drop remembered units for this profile's products
+    const units = (await this.getAll("productUnits"))
+      .filter(u => u.profileId === profileId);
+    for (const u of units) await this.delete("productUnits", u.id);
     return this.delete("profiles", profileId);
   },
 
@@ -120,6 +131,21 @@ const Store = {
   },
   async setGoals(profileId, goalKeys) {
     return this.put("goals", { id: profileId, goalKeys });
+  },
+
+  // ---- remembered product units (last confirmed unit per product) ----
+  // Keyed by "profileId|lowercase name" so the same product in a different
+  // profile never inherits another profile's unit.
+  async rememberedUnit(profileId, name) {
+    const row = await this.get("productUnits",
+                               profileId + "|" + String(name).toLowerCase());
+    return row ? row.unit : null;
+  },
+  async rememberUnit(profileId, name, unit) {
+    return this.put("productUnits", {
+      id: profileId + "|" + String(name).toLowerCase(),
+      profileId, unit, name: String(name),
+    });
   },
 
   // ---- meta ----
