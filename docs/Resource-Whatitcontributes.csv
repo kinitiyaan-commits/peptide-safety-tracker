@@ -1,0 +1,7 @@
+"Resource","What it contributes"
+"FDA Drugs@FDAfda","Product and approval records for checking regulatory information."
+"DailyMeddailymed.nlm.nih","Drug-label data and an API for accessing labeling and history."
+"FDA peptide compounding concernsfda","Substance-specific safety concerns and compounding-policy context."
+"FDA online-pharmacy guidancefda","Criteria for checking pharmacies, including licensure and prescription requirements."
+"NCBI E-utilitiesncbi.nlm.nih","Programmatic access to biomedical literature for your evidence library."
+"HHS health-app guidancehhs","Resources for assessing privacy obligations before handling real health data."

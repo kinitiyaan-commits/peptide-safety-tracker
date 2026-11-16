@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#059669">
+  <title>Peptide Safety Tracker</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{background:#020617;color:#f1f5f9;font-family:system-ui,-apple-system,sans-serif}
+    .inp{background:#0f172a;border:1px solid #334155;border-radius:.6rem;padding:.6rem .75rem;width:100%;color:#f1f5f9;font-size:.95rem}
+    .inp:focus{outline:2px solid #059669;border-color:#059669}
+    .inp.invalid{border-color:#dc2626}
+    .card{background:#0f172a;border:1px solid #1e293b;border-radius:1rem}
+    .chip{border:1px solid #475569;border-radius:9999px;padding:.4rem .85rem;font-size:.8rem;color:#e2e8f0;background:#0f172a}
+    .btn{background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-weight:700;border-radius:.6rem;padding:.75rem 1.25rem;font-size:.9rem}
+    .btn2{background:#1e293b;color:#e2e8f0;font-weight:600;border-radius:.6rem;padding:.75rem 1.25rem;font-size:.9rem;border:1px solid #334155}
+    details>summary{cursor:pointer;list-style:none}
+    details>summary::-webkit-details-marker{display:none}
+    .fab{width:3.75rem;height:3.75rem;border-radius:9999px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:1.75rem;box-shadow:0 8px 24px rgba(5,150,105,.4)}
+    .err{color:#f87171;font-size:.8rem;min-height:1.1rem}
+    .picker-wrap{position:relative}
+    .picker-list{position:absolute;left:0;right:0;bottom:100%;margin-bottom:.3rem;z-index:70;background:#0f172a;border:1px solid #334155;border-radius:.6rem;max-height:15rem;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+    .hidden{display:none!important}
+    main{padding-bottom:7rem}
+  </style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between gap-2">
+  <h1 class="font-black tracking-tight text-lg">Peptide Safety <span class="text-emerald-400">Tracker</span></h1>
+  <div class="flex items-center gap-2">
+    <span id="profile-badge" class="text-xs bg-slate-900 border border-slate-700 rounded-full px-3 py-1"></span>
+  </div>
+</header>
+<div id="offline-badge" class="hidden bg-amber-900/60 text-amber-200 text-xs text-center py-1.5 px-4">Offline — the app still works; your data is on this device.</div>
+
+<main class="max-w-3xl mx-auto p-4 space-y-6">
+
+  <!-- First run: create a profile -->
+  <div id="first-run" class="hidden card p-6 space-y-3">
+    <h2 class="text-xl font-bold">Create your first profile</h2>
+    <p class="text-sm text-slate-400">All data stays in this browser on this device — nothing is sent to any server. Profiles organize records; they are not passwords, and anyone who can use this device can open any profile.</p>
+    <form onsubmit="createProfile(event)" class="space-y-2">
+      <input id="new-profile-name" class="inp" placeholder="Profile name" maxlength="40">
+      <input id="new-profile-age" type="number" min="1" max="120" class="inp" placeholder="Age (optional)">
+      <button class="btn w-full">Create profile</button>
+    </form>
+  </div>
+
+  <!-- Disclaimer: one line + Learn more -->
+  <div class="bg-amber-950/30 border border-amber-900/60 p-3 rounded-xl text-xs text-amber-100 leading-relaxed">
+    <strong>Disclaimer:</strong> <span id="disclaimer-line">This app is not medical advice; many research peptides are not FDA-approved.</span>
+    <details class="mt-1"><summary class="text-amber-300 underline">Learn more</summary>
+      <span id="disclaimer-more" class="block pt-1 text-amber-200/90"></span>
+    </details>
+  </div>
+
+  <!-- TODAY -->
+  <section id="sec-today" class="space-y-4">
+    <div class="card p-6 space-y-3">
+      <h2 class="text-2xl font-black">Today <span id="today-date" class="text-sm font-semibold text-slate-400"></span></h2>
+      <p id="dash-sub" class="text-sm text-slate-400"></p>
+      <p class="text-xs text-slate-500">Use the <strong>+</strong> button below to log a dose, a symptom, or an observation.</p>
+      <div id="today-reminders" class="space-y-2"></div>
+      <div id="today-recent" class="space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="sec-history" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">History</h2>
+      <div class="flex gap-2">
+        <input id="hist-q" class="inp" placeholder="Filter by text…">
+        <select id="hist-type" class="inp !w-36">
+          <option value="all">All events</option>
+          <option value="dose">Doses</option>
+          <option value="symptom">Symptoms</option>
+          <option value="observation">Observations</option>
+        </select>
+      </div>
+      <div id="history-list" class="space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- CATALOG / LEARN -->
+  <section id="sec-catalog" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">Catalog <span class="text-xs text-slate-400 font-normal">— sourced regulatory status only, no recommendations</span></h2>
+      <input id="cat-q" class="inp" placeholder="Search catalog (aliases work, e.g. HGH)…">
+      <div id="catalog-list" class="space-y-3"></div>
+      <div id="verify-result"></div>
+      <details class="text-sm"><summary class="text-emerald-400 underline">What "regulatory status" means — Learn more</summary>
+        <ul class="text-sm text-slate-300 space-y-2 list-disc pl-5 pt-2 leading-relaxed">
+          <li><strong>"Approved products exist"</strong> is an ingredient-level statement: FDA-approved prescription products exist for this ingredient, but approval applies only to those <em>specific products</em>. Other versions — compounded and "research" versions of the same molecule — are <strong>not</strong> approved.</li>
+          <li><strong>"No FDA-approved product"</strong> means no FDA-approved human use exists for that ingredient at all.</li>
+          <li>Approval is verified per <strong>exact product</strong> on DailyMed — never per ingredient.</li>
+          <li>"Source verified" means the app's developer checked the cited official page on the review date — <strong>not qualified clinical review</strong>, never implying safety or endorsement.</li>
+        </ul>
+      </details>
+      <details class="text-sm"><summary class="text-emerald-400 underline">If you feel unwell — Learn more</summary>
+        <p class="pt-2 text-slate-300 leading-relaxed">Severe symptoms — trouble breathing, swelling of face/throat, chest pain, fainting, rapidly worsening reactions — need <strong>emergency medical care immediately</strong>. Show clinicians exactly what you took (your export file is designed for that). For anything milder but persistent, log it and raise it with a licensed healthcare provider.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="sec-settings" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">Settings</h2>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Profiles</h3>
+        <div class="flex gap-2">
+          <select id="profile-select" class="inp"></select>
+          <button onclick="deleteProfile()" class="btn2 !py-2 whitespace-nowrap text-xs">Delete profile</button>
+        </div>
+        <form onsubmit="createProfile(event)" class="flex gap-2">
+          <input id="new-profile-name" class="inp" placeholder="New profile name" maxlength="40">
+          <button class="btn !py-2 whitespace-nowrap text-xs">Add</button>
+        </form>
+        <p class="text-xs text-slate-500">Profiles are not authentication — anyone who can use this device can open any profile.</p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Tracking goals <span class="text-xs text-slate-400 font-normal">(customize your journal — not medication recommendations)</span></h3>
+        <p id="settings-goal-note" class="text-xs text-slate-400"></p>
+        <div id="goal-chips" class="flex flex-wrap gap-2"></div>
+        <p id="height-goal-note" class="hidden text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Growth hormone &amp; height:</strong> "Growth hormone is not a general height enhancer. Once growth plates have fused, HGH does not increase height." (<a class="underline" href="https://my.clevelandclinic.org/health/articles/23309-human-growth-hormone-hgh" target="_blank" rel="noopener">Cleveland Clinic</a>) — this app never estimates growth potential.</p>
+        <p class="text-xs text-slate-500">Goal measurements are recorded in Observations, never on doses.</p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Reminders <span class="text-xs text-slate-400 font-normal">(in-app only)</span></h3>
+        <form id="reminder-form" onsubmit="addReminder(event)" class="space-y-2">
+          <div class="picker-wrap"><input id="r-name" class="inp" placeholder="Product name" maxlength="80"><div id="r-name-dd" class="picker-list hidden"></div></div>
+          <div class="flex gap-2">
+            <input id="r-time" type="time" class="inp">
+            <input id="r-days" class="inp" value="Every day" title="e.g. Mon,Wed,Fri or Every day">
+          </div>
+          <input id="r-notes" class="inp" placeholder="Notes (optional)">
+          <button class="btn2 w-full !py-2 text-xs">Add reminder</button>
+        </form>
+        <div id="reminders-list" class="space-y-2"></div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Export &amp; restore</h3>
+        <p class="text-xs text-slate-400">Export saves a JSON backup of <strong>every profile</strong> on this device. Keep the file private — it contains your health journal.</p>
+        <button onclick="exportData()" class="btn"><span>Download full export (JSON)</span></button>
+        <div class="space-y-2">
+          <label class="text-xs text-slate-400 block">Import / restore a previously exported file:</label>
+          <input id="import-file" type="file" accept="application/json,.json" class="text-xs text-slate-400">
+          <div id="import-preview" class="hidden"></div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Where your data lives</h3>
+        <p id="storage-note" class="text-sm text-slate-300 leading-relaxed"></p>
+        <details class="text-xs text-slate-400"><summary class="underline">Learn more</summary>
+          <p class="pt-1 leading-relaxed">This app is fully offline: your records are stored in this browser's IndexedDB on this device, and no server receives them. Clearing the browser's site data (or uninstalling the installed app) deletes every record permanently. The only network requests are loading the app shell and the official-source links you choose to open — no personal data is included in those links.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- FAB chooser -->
+<div id="fab-chooser" class="hidden fixed inset-0 bg-black/80 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeFabChooser()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-2">
+    <p class="text-xs text-slate-400 text-center pb-1">What are you logging?</p>
+    <button onclick="closeFabChooser();openLogSheet()" class="btn w-full !py-3.5">A dose (administration)</button>
+    <button onclick="closeFabChooser();openObservationSheet()" class="btn2 w-full !py-3.5">An observation (no dose)</button>
+    <button onclick="closeFabChooser();openSymptomSheet()" class="btn2 w-full !py-3.5">A symptom</button>
+    <button onclick="closeFabChooser()" class="w-full text-center text-xs text-slate-400 py-2 underline">Cancel</button>
+  </div>
+</div>
+
+<!-- LOG DOSE -->
+<div id="log-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeLogSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5">
+    <div class="flex justify-between items-center pb-2">
+      <h3 id="log-sheet-title" class="font-bold">Log a dose</h3>
+      <button onclick="closeLogSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logUsage(event)" class="space-y-3">
+      <div class="picker-wrap"><label class="block text-xs text-slate-400 mb-1">Product / peptide</label>
+        <input id="u-name" class="inp" placeholder="Type to search the catalog…" maxlength="80" autocomplete="off">
+        <div id="u-name-dd" class="picker-list hidden"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-xs text-slate-400 mb-1">Amount</label>
+          <input id="u-amount" type="number" step="any" min="0" class="inp" inputmode="decimal"></div>
+        <div><label class="block text-xs text-slate-400 mb-1">Unit</label>
+          <select id="u-unit" class="inp"><option>mcg</option><option>mg</option><option>IU</option><option>units</option><option>mL</option></select></div>
+      </div>
+      <div><label class="block text-xs text-slate-400 mb-1">When</label>
+        <input id="u-when" type="datetime-local" class="inp"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+        <input id="u-notes" class="inp" placeholder="Anything worth remembering" maxlength="300"></div>
+      <div class="err" id="u-error"></div>
+      <button class="btn w-full !py-3" id="u-submit"><span id="u-submit-label">Save entry</span></button>
+    </form>
+  </div>
+</div>
+
+<!-- SYMPTOM -->
+<div id="symptom-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeSymptomSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5">
+    <div class="flex justify-between items-center pb-2">
+      <h3 class="font-bold">Log a symptom</h3>
+      <button onclick="closeSymptomSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logSymptom(event)" class="space-y-3">
+      <div><label class="block text-xs text-slate-400 mb-1">Symptom name</label>
+        <input id="s-name" class="inp" placeholder="e.g. headache" maxlength="80"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Description</label>
+        <input id="s-desc" class="inp" placeholder="What did you feel?" maxlength="500"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Severity (1 = mild … 5 = severe)</label>
+        <select id="s-severity" class="inp"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+      <div class="err" id="s-error"></div>
+      <button class="btn w-full !py-3">Save symptom</button>
+    </form>
+  </div>
+</div>
+
+<!-- OBSERVATION -->
+<div id="observation-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeObservationSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
+    <div class="flex justify-between items-center pb-2">
+      <h3 class="font-bold">Log an observation</h3>
+      <button onclick="closeObservationSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logObservation(event)" class="space-y-3">
+      <div><label class="block text-xs text-slate-400 mb-1">When</label>
+        <input id="o-when" type="datetime-local" class="inp"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+        <input id="o-notes" class="inp" placeholder="Anything worth remembering" maxlength="300"></div>
+      <div id="observation-fields" class="space-y-3"></div>
+      <div class="err" id="o-error"></div>
+      <button class="btn w-full !py-3">Save observation</button>
+    </form>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<!-- bottom nav + FAB -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/97 border-t border-slate-800 backdrop-blur flex items-center px-2 py-1" style="padding-bottom:max(0.25rem, env(safe-area-inset-bottom))">
+  <button id="nav-today" onclick="gotoTab('today')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-emerald-400">Today</button>
+  <button id="nav-history" onclick="gotoTab('history')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">History</button>
+  <div class="flex-1 flex justify-center"><button class="fab" onclick="openFabChooser()" title="Log something" aria-label="Log something">+</button></div>
+  <button id="nav-catalog" onclick="gotoTab('catalog')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">Catalog</button>
+  <button id="nav-settings" onclick="gotoTab('settings')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">Settings</button>
+</nav>
+
+<script src="./data.js"></script>
+<script src="./store.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

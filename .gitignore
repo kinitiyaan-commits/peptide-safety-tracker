@@ -1,0 +1,39 @@
+# Local health database — NEVER commit (real profile data lives here).
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Virtualenv
+.venv/
+venv/
+
+# User exports (health data leaves the machine only on explicit export)
+exports/
+*.json.gz
+export_*.json
+export_*.csv
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# Tooling scratch
+/tmp/
