@@ -126,6 +126,86 @@ Regression tests for all of the above live in `tests/test_pwa.py`
 `TestInstallAccessibilityFeedback`, `TestCombinedTimeline`,
 `TestAppointmentSummary`).
 
+## Pre-Reddit release blockers (2026-11-15, branch `feature/beta-now`)
+
+Implemented after the branch was reconciled with main (merge `6b69a6c`),
+keeping main's downward picker fix and unique profile form IDs:
+
+- **Local styling, no CDN:** `pwa/styles.css` (versioned, comment header
+  matches the SW cache version) replaces the Tailwind CDN `<script>`;
+  removed from `index.html` and from the SW precache. Every class used by
+  the app is covered (verified by a build-time class-inventory check and
+  visually in the browser).
+- **Controlled service-worker updates:** `sw.js` rewritten — strict
+  install (`cache.addAll`, an asset failure keeps the old worker), no
+  automatic `skipWaiting` (the worker waits until the user taps
+  "Reload & update", which posts `ACCEPT_UPDATE`), activation deletes only
+  `peptide-safety-static-*` caches, CACHE_PREFIX-based versioning.
+- **App-side update flow:** the banner shows for a newly installed worker
+  AND for an already-waiting one; applying the update first captures an
+  unsaved log/symptom/observation/summary draft to `sessionStorage`
+  (confirm dialog: OK = save draft and reload, Cancel = keep working);
+  after the reload the draft is restored to its sheet. Reload happens
+  once, on `controllerchange`. Verified end-to-end in the browser,
+  including draft capture, restore, and activation.
+- **DB-upgrade safety:** `onversionchange` closes the connection so a newer
+  tab can upgrade; `onblocked` surfaces "close other tabs" via a toast
+  instead of hanging silently. Rollback note: the upgrade path only
+  creates missing stores; reverting code does not need a DB downgrade
+  (older code ignores the extra `productUnits` store).
+- **Atomic imports:** `Store.importAtomic` writes every record of an
+  import in ONE multi-store transaction (replace-mode clears stores inside
+  the same transaction, not before it). `validateExport` hardened: schema
+  1 or 2, ID pattern `^[A-Za-z0-9_-]{1,64}$`, 2 MB file cap, per-store and
+  total record limits, finite amounts, valid ISO dates, allowed units and
+  severities, duplicate profile ids and the same record id under two
+  profiles are fatal. Imports are revalidated at apply time. Verified in
+  the browser: an aborted transaction leaves existing data untouched.
+- **No XSS via imported data:** record ids are never interpolated into
+  inline `onclick` attributes (buttons use `data-act`/`data-id` with one
+  delegated listener); `esc()` now escapes quotes so it is safe inside
+  attributes. Verified: a hostile import renders inert (no `<img>`/`<script>`
+  execution, malicious ids are rejected by validation).
+- **Remembered-unit race guard:** the async lookup in
+  `onProductChanged` checks a monotonic token, the open-sheet epoch, and
+  the current product text before applying a result — a slow lookup for
+  an earlier product can never overwrite a newer state (verified with a
+  deliberately slow stub lookup).
+- **Backup wording honest:** "Last export initiated" (the app cannot see
+  whether the file survived) plus a verify-the-file reminder; export
+  schema 2 includes remembered `productUnits`; schema-1 imports rebuild
+  remembered units from each product's most recent usage record.
+- **Summary dates:** reversed From/To ranges are rejected in the preview,
+  print, and download paths; periods are matched by local calendar day
+  (consistent with the History filters); a sensitivity note is included
+  even when private notes are excluded.
+- **Accurate privacy wording:** no "never transmits anything" claims;
+  the in-app text now says GitHub Pages (hosting) receives IPs and standard
+  logs when the shell loads, and that verification links include the
+  product name being checked. The feedback destination is explicitly
+  marked pending the owner's decision, with a public-tracker warning.
+- **No age collection:** the PWA's optional age input was removed (adult
+  audience; the number served no purpose). Profile forms already read
+  values from the submitted form.
+- **privacy.html / terms.html:** drafted with clearly-marked
+  `[OWNER TO CONFIRM]` placeholders (operator/contact/liability are owner
+  decisions), linked from the first-run screen and Settings → Where your
+  data lives, and included in the SW precache so they open offline.
+- **Drugs@FDA link-out** added to the catalog's verification links
+  (approval checked per exact product; DailyMed for labeling only).
+
+Browser-verified (desktop, Chromium) at the commit noted in the release
+report: controlled update with waiting worker and open form; aborted
+import leaves data intact; hostile import inert; stale unit lookup
+discarded; reversed summary range rejected; schema-2 export round-trip;
+schema-1 rebuild of remembered units; offline relaunch serves the shell
+and privacy/terms from cache; profile isolation (profile B sees none of
+profile A's records).
+
+**Still untested without a real phone:** install prompt, standalone
+display, safe-area layout, and true offline launch from the home-screen
+icon. Owner must run these before the Reddit post.
+
 ## Regenerating static data
 
 After editing the catalog or goals in the Python seed:

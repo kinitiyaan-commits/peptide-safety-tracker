@@ -43,7 +43,31 @@ function openDB() {
         }
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onblocked = () => {
+      // Another tab still holds an old-version connection, so this tab's
+      // upgrade cannot proceed yet. Surface it instead of hanging silently;
+      // the request may still succeed later, and then we close immediately
+      // so we never become the blocker ourselves.
+      _dbPromise = null;
+      req.onsuccess = () => req.result.close();
+      if (typeof Store !== "undefined" && Store.onBlocked) {
+        Store.onBlocked(new Error(
+          "blocked: close this app in other tabs or windows, then reload here to continue the update"));
+      }
+      reject(new Error(
+        "blocked: close this app in other tabs or windows, then reload here to continue the update"));
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      // If a NEWER version of the app (another tab running newer code)
+      // requests an upgrade, this connection must close so it can proceed.
+      // Dropping _dbPromise makes the next call reopen at the new version.
+      db.onversionchange = () => {
+        db.close();
+        _dbPromise = null;
+      };
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return _dbPromise;
@@ -70,6 +94,10 @@ function req(request, transform) {
 }
 
 const Store = {
+  // Set by app.js: called when a DB upgrade is blocked by another open tab,
+  // so the UI can tell the user what to do instead of failing silently.
+  onBlocked: null,
+
   // ---- generic ----
   getAll(store) {
     return tx(store, "readonly", os => req(os.getAll()));
@@ -160,6 +188,37 @@ const Store = {
   // ---- import ----
   async wipeAllData() {
     for (const store of STORES) await this.clear(store);
+  },
+
+  // ---- atomic multi-store import ----
+  // All writes land in ONE IndexedDB transaction across all affected
+  // stores: either every record is written or none is. If anything fails
+  // or the transaction aborts, existing data is untouched. No awaits are
+  // allowed between the requests — they are queued synchronously.
+  //   writes: [{store, records: [..]}]   (all stores must already exist)
+  //   clearStores: store names emptied first (inside the same transaction)
+  importAtomic(writes, clearStores) {
+    return openDB().then(db => new Promise((resolve, reject) => {
+      const names = [...new Set(writes.map(w => w.store)
+        .concat(clearStores || []))];
+      let t;
+      try { t = db.transaction(names, "readwrite"); }
+      catch (e) { reject(e); return; }
+      t.oncomplete = () => resolve(true);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error ||
+        new Error("Import aborted — nothing was changed"));
+      try {
+        for (const name of clearStores || []) t.objectStore(name).clear();
+        for (const w of writes) {
+          const os = t.objectStore(w.store);
+          for (const r of w.records) os.put(r);
+        }
+      } catch (e) {
+        try { t.abort(); } catch (_) {}
+        reject(e);
+      }
+    }));
   },
 };
 

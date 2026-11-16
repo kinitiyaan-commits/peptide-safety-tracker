@@ -97,7 +97,9 @@ IndexedDB on that device. Clearing browser data deletes them. See
   be recovered by the app.
 - Reminders only fire while the page is open in a browser tab (no
   background scheduler in the server prototype).
-- Catalog statuses are developer-verified against cited sources on the
+- The PWA styles itself from a local, versioned stylesheet
+  (`pwa/styles.css`) — no CDN or third-party runtime code is loaded.
+  Catalog statuses are developer-verified against cited sources on the
   review date, not clinically reviewed; two entries remain marked
   `awaiting-verification` pending source review.
 - The PWA's reminder and export features are equivalent, but its storage is

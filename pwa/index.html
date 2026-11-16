@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles.css">
   <style>
     body{background:#020617;color:#f1f5f9;font-family:system-ui,-apple-system,sans-serif}
     .inp{background:#0f172a;border:1px solid #334155;border-radius:.6rem;padding:.6rem .75rem;width:100%;color:#f1f5f9;font-size:.95rem}
@@ -48,10 +48,9 @@
   <!-- First run: create a profile -->
   <div id="first-run" class="hidden card p-6 space-y-3">
     <h2 class="text-xl font-bold">Create your first profile</h2>
-    <p class="text-sm text-slate-400">All data stays in this browser on this device — nothing is sent to any server. Profiles organize records; they are not passwords, and anyone who can use this device can open any profile.</p>
+    <p class="text-sm text-slate-400">All data stays in this browser on this device — nothing you type is sent to any server. This app is for adults organizing existing records. Profiles organize records; they are not passwords, and anyone who can use this device can open any profile. See the <a href="./privacy.html" class="text-emerald-400 underline">privacy notice</a> and <a href="./terms.html" class="text-emerald-400 underline">terms</a>.</p>
     <form onsubmit="createProfile(event)" class="space-y-2">
       <input id="new-profile-name" name="pname" class="inp" placeholder="Profile name" maxlength="40">
-      <input id="new-profile-age" name="page" type="number" min="1" max="120" class="inp" placeholder="Age (optional)">
       <button class="btn w-full">Create profile</button>
     </form>
   </div>
@@ -184,21 +183,23 @@
             <li><strong>iPhone/iPad (Safari):</strong> Share button → <em>Add to Home Screen</em>.</li>
             <li><strong>Desktop (Chrome/Edge):</strong> install icon in the address bar, or menu → <em>Install app</em>.</li>
           </ul>
-          <p class="pt-1 leading-relaxed"><strong>Offline limitations:</strong> once installed, the app opens and works with no connection — records are on the device. Reminders still only appear while the app is open. Updates are fetched when you're next online (you'll see an "Update available" note; reloading applies it without touching your records).</p>
+          <p class="pt-1 leading-relaxed"><strong>Offline limitations:</strong> once installed, the app opens and works with no connection — records are on the device. Reminders still only appear while the app is open. Updates are fetched when you're next online (you'll see an "Update available" note; updating only reloads when you choose, and your records plus any open draft are preserved).</p>
         </details>
       </div>
 
       <div class="space-y-2">
         <h3 class="font-bold text-emerald-300">Feedback &amp; problems</h3>
-        <p class="text-xs text-slate-300 leading-relaxed">Tell the developer what got stuck, what you expected, and what felt unnecessary — in whatever channel you normally reach them (this app has no built-in sending and never transmits anything).</p>
-        <p class="text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Privacy warning:</strong> when giving feedback, do <strong>not</strong> include medical records, symptom details, product names tied to you, exports, or screenshots of your entries. The app never attaches data to feedback automatically — there is no such feature — so anything you share is only what you type yourself.</p>
+        <p class="text-xs text-slate-300 leading-relaxed">Tell the developer what got stuck, what you expected, and what felt unnecessary. The app itself has no built-in sending — you choose where to send feedback. <span class="text-amber-200">Destination pending the owner's decision (placeholder): feedback will go to a channel the owner chooses and documents here.</span></p>
+        <p class="text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Privacy warning:</strong> if feedback goes to a public issue tracker, everything you post is <strong>public</strong>. Do <strong>not</strong> include medical records, symptom details, product names tied to you, exports, or screenshots of your entries. The app never attaches data to feedback automatically — there is no such feature — so anything you share is only what you type yourself.</p>
       </div>
 
       <div class="space-y-2">
         <h3 class="font-bold text-emerald-300">Where your data lives</h3>
         <p id="storage-note" class="text-sm text-slate-300 leading-relaxed"></p>
         <details class="text-xs text-slate-400"><summary class="underline">Learn more</summary>
-          <p class="pt-1 leading-relaxed">This app is fully offline: your records are stored in this browser's IndexedDB on this device, and no server receives them. Clearing the browser's site data (or uninstalling the installed app) deletes every record permanently. The only network requests are loading the app shell and the official-source links you choose to open — no personal data is included in those links.</p>
+          <p class="pt-1 leading-relaxed">Your records are stored in this browser's IndexedDB on this device, and no server receives them. Clearing the browser's site data (or uninstalling the installed app) deletes every record permanently.</p>
+          <p class="pt-1 leading-relaxed">The app is hosted on GitHub Pages: when the app shell loads, GitHub receives your IP address and standard web-server logs, as with any website. The app also makes no other requests except the official-source links <strong>you</strong> choose to open — those links include the product name you're checking, which the sites' operators can see. No other personal data leaves this device.</p>
+          <p class="pt-1"><a href="./privacy.html" class="text-emerald-400 underline">Full privacy notice</a> · <a href="./terms.html" class="text-emerald-400 underline">Terms of use</a></p>
         </details>
       </div>
     </div>

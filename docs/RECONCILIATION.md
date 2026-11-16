@@ -210,3 +210,47 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ❌ missing 
 - 🔒 Real-phone verification (install prompt, standalone, safe areas,
   offline launch) — no phone available in this environment; listed as a
   manual follow-up.
+
+## Pre-Reddit release blockers (2026-11-15, branch `feature/beta-now`)
+
+All from the review of `5b15ee6` ("final pre-Reddit update"); branch first
+reconciled with main (merge `6b69a6c`), deliberately keeping main's
+downward picker fix (supersedes the upward-picker note above for the PWA),
+unique profile form ids, and the Pages workflow. Implemented and
+browser-verified (details in `docs/PWA.md`):
+
+- ✅ Local versioned `pwa/styles.css` replaces the Tailwind CDN (also
+  removed from the SW precache) — no remote runtime dependency.
+- ✅ Controlled SW updates: strict install, waiting-until-accepted (no
+  auto `skipWaiting`), already-waiting worker detected, unsaved-form
+  draft captured to sessionStorage before reload and restored after,
+  activation deletes only `peptide-safety-static-*` caches.
+- ✅ DB-upgrade safety: `onversionchange` close + `onblocked` surfaced as
+  a toast; upgrade path only creates stores (rollback-safe).
+- ✅ Atomic validated imports: one multi-store transaction; revalidation
+  at apply time; strict limits (ID pattern, 2 MB, counts, finite amounts,
+  ISO dates, units/severities); cross-profile id collisions fatal;
+  aborted import leaves data intact (verified).
+- ✅ Imported data cannot execute: no record ids in inline handlers
+  (delegated `data-act`/`data-id` clicks); quote-safe `esc()`;
+  hostile-text import verified inert.
+- ✅ Remembered-unit async lookups guarded against stale results.
+- ✅ Backup wording "Last export initiated" + verify-file reminder;
+  export schema 2 includes `productUnits`; schema-1 imports rebuild
+  remembered units from most recent usage.
+- ✅ Summary: reversed range rejected (preview/print/download); local
+  calendar-day matching consistent with History; sensitivity note even
+  when notes are excluded.
+- ✅ Accurate privacy wording (GitHub Pages logs IPs; verification links
+  include the searched product name; no "never transmits anything");
+  feedback destination marked owner-pending with public-tracker warning;
+  PWA age input removed (adult audience, number served no purpose).
+- ✅ `privacy.html` + `terms.html` drafted with `[OWNER TO CONFIRM]`
+  placeholders (no invented operator/contact), linked from first-run +
+  Settings, precached for offline.
+- ✅ Drugs@FDA per-product link added to verification links; approval
+  wording stays ingredient-level.
+- 🔒 Owner decisions still pending: feedback destination, privacy/terms
+  content (legal review), branding/license inventory sign-off.
+- 🔒 Real-phone checks (install prompt, standalone, safe areas, offline
+  launch, narrow screen) — untested, owner task.

@@ -1,0 +1,182 @@
+/* styles.css — Peptide Safety Tracker, local styling (no remote runtime deps).
+ * Version 4 — matches sw.js CACHE_PREFIX "peptide-safety-static-" v4.
+ * Hand-built utility subset: only the classes the app actually uses, with
+ * Tailwind-default values so the rendering is unchanged from the CDN era.
+ */
+
+/* ---------- text ---------- */
+.text-xs{font-size:.75rem;line-height:1rem}
+.text-sm{font-size:.875rem;line-height:1.25rem}
+.text-lg{font-size:1.125rem;line-height:1.75rem}
+.text-xl{font-size:1.25rem;line-height:1.75rem}
+.text-2xl{font-size:1.5rem;line-height:2rem}
+.text-\[\.7rem\]{font-size:.7rem}
+.font-normal{font-weight:400}
+.font-semibold{font-weight:600}
+.font-bold{font-weight:700}
+.font-black{font-weight:900}
+.tracking-tight{letter-spacing:-.025em}
+.uppercase{text-transform:uppercase}
+.underline{text-decoration-line:underline}
+.leading-relaxed{line-height:1.625}
+.text-left{text-align:left}
+.text-center{text-align:center}
+.text-right{text-align:right}
+
+/* ---------- colors: text ---------- */
+.text-white{color:#fff}
+.text-amber-100{color:#fef3c7}
+.text-amber-200{color:#fde68a}
+.text-amber-200\/90{color:rgba(253,230,138,.9)}
+.text-amber-300{color:#fcd34d}
+.text-amber-300\/90{color:rgba(252,211,77,.9)}
+.text-amber-400{color:#fbbf24}
+.text-emerald-200{color:#d1fae5}
+.text-emerald-300{color:#6ee7b7}
+.text-emerald-400{color:#34d399}
+.text-red-200{color:#fecaca}
+.text-red-300{color:#fca5a5}
+.text-sky-400{color:#38bdf8}
+.text-slate-300{color:#cbd5e1}
+.text-slate-400{color:#94a3b8}
+.text-slate-500{color:#64748b}
+
+/* ---------- colors: background ---------- */
+.bg-amber-900\/60{background-color:rgba(120,53,15,.6)}
+.bg-amber-950\/30{background-color:rgba(69,26,3,.3)}
+.bg-amber-950\/40{background-color:rgba(69,26,3,.4)}
+.bg-black\/80{background-color:rgba(0,0,0,.8)}
+.bg-emerald-700{background-color:#047857}
+.bg-emerald-950\/60{background-color:rgba(2,44,34,.6)}
+.bg-red-950\/40{background-color:rgba(69,10,10,.4)}
+.bg-slate-900{background-color:#0f172a}
+.bg-slate-950{background-color:#020617}
+.bg-slate-950\/95{background-color:rgba(2,6,23,.95)}
+.bg-slate-950\/97{background-color:rgba(2,6,23,.97)}
+.hover\:bg-slate-800:hover{background-color:#1e293b}
+
+/* ---------- colors: border ---------- */
+.border{border-width:1px}
+.border-b{border-bottom-width:1px}
+.border-t{border-top-width:1px}
+.border-amber-700\/60{border-color:rgba(180,83,9,.6)}
+.border-amber-900\/60{border-color:rgba(120,53,15,.6)}
+.border-red-800{border-color:#991b1b}
+.border-slate-700{border-color:#334155}
+.border-slate-800{border-color:#1e293b}
+.border-dashed{border-style:dashed}
+.border-slate-500{border-color:#64748b}
+.border-emerald-500{border-color:#10b981}
+
+/* ---------- layout ---------- */
+.block{display:block}
+.hidden{display:none!important}
+.flex{display:flex}
+.grid{display:grid}
+.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.flex-1{flex:1 1 0%}
+.flex-col{flex-direction:column}
+.flex-wrap{flex-wrap:wrap}
+.items-center{align-items:center}
+.items-end{align-items:flex-end}
+.items-start{align-items:flex-start}
+.justify-between{justify-content:space-between}
+.justify-center{justify-content:center}
+.self-center{align-self:center}
+.shrink-0{flex-shrink:0}
+.gap-0\.5{gap:.125rem}
+.gap-2{gap:.5rem}
+.gap-3{gap:.75rem}
+.cursor-pointer{cursor:pointer}
+
+/* ---------- spacing ---------- */
+.p-0{padding:0}
+.p-3{padding:.75rem}
+.p-4{padding:1rem}
+.p-5{padding:1.25rem}
+.p-6{padding:1.5rem}
+.px-2{padding-left:.5rem;padding-right:.5rem}
+.px-3{padding-left:.75rem;padding-right:.75rem}
+.px-4{padding-left:1rem;padding-right:1rem}
+.py-1{padding-top:.25rem;padding-bottom:.25rem}
+.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}
+.py-2{padding-top:.5rem;padding-bottom:.5rem}
+.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}
+.py-3{padding-top:.75rem;padding-bottom:.75rem}
+.pt-0\.5{padding-top:.125rem}
+.pt-1{padding-top:.25rem}
+.pt-2{padding-top:.5rem}
+.pb-1{padding-bottom:.25rem}
+.pb-2{padding-bottom:.5rem}
+.mb-1{margin-bottom:.25rem}
+.mt-1{margin-top:.25rem}
+.ml-1{margin-left:.25rem}
+.ml-2{margin-left:.5rem}
+.mx-auto{margin-left:auto;margin-right:auto}
+.space-y-0\.5>*+*{margin-top:.125rem}
+.space-y-1>*+*{margin-top:.25rem}
+.space-y-2>*+*{margin-top:.5rem}
+.space-y-3>*+*{margin-top:.75rem}
+.space-y-4>*+*{margin-top:1rem}
+.space-y-6>*+*{margin-top:1.5rem}
+.pl-4{padding-left:1rem}
+.pl-5{padding-left:1.25rem}
+
+/* ---------- sizing & position ---------- */
+.w-4{width:1rem}
+.h-4{height:1rem}
+.w-full{width:100%}
+.min-h-screen{min-height:100vh}
+.min-w-\[8rem\]{min-width:8rem}
+.max-w-3xl{max-width:48rem}
+.max-h-72{max-height:18rem}
+.max-h-\[85vh\]{max-height:85vh}
+.max-h-\[90vh\]{max-height:90vh}
+.overflow-y-auto{overflow-y:auto}
+.sticky{position:sticky}
+.fixed{position:fixed}
+.top-0{top:0}
+.bottom-0{bottom:0}
+.left-0{left:0}
+.right-0{right:0}
+.inset-0{top:0;right:0;bottom:0;left:0}
+.z-40{z-index:40}
+.z-50{z-index:50}
+.z-\[60\]{z-index:60}
+.z-\[70\]{z-index:70}
+.whitespace-nowrap{white-space:nowrap}
+
+/* ---------- borders & radius ---------- */
+.rounded-full{border-radius:9999px}
+.rounded-lg{border-radius:.5rem}
+.rounded-xl{border-radius:.75rem}
+.rounded-2xl{border-radius:1rem}
+.rounded-t-2xl{border-top-left-radius:1rem;border-top-right-radius:1rem}
+.list-disc{list-style-type:disc}
+
+/* ---------- form accent ---------- */
+.accent-emerald-500{accent-color:#10b981}
+.backdrop-blur{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+
+/* ---------- important overrides (!) ---------- */
+.\!py-2{padding-top:.5rem!important;padding-bottom:.5rem!important}
+.\!py-2\.5{padding-top:.625rem!important;padding-bottom:.625rem!important}
+.\!py-3{padding-top:.75rem!important;padding-bottom:.75rem!important}
+.\!py-3\.5{padding-top:.875rem!important;padding-bottom:.875rem!important}
+.\!text-xs{font-size:.75rem!important}
+.\!w-auto{width:auto!important}
+.\!border-slate-500{border-color:#64748b!important}
+.\!border-emerald-500{border-color:#10b981!important}
+.\!bg-emerald-950{background-color:#022c22!important}
+
+/* ---------- responsive (sm ≥640px) ---------- */
+@media (min-width:640px){
+  .sm\:items-center{align-items:center}
+  .sm\:max-w-md{max-width:28rem}
+  .sm\:max-w-sm{max-width:24rem}
+  .sm\:p-4{padding:1rem}
+  .sm\:rounded-2xl{border-radius:1rem}
+}
+
+/* ---------- shared helper ---------- */
+.muted{color:#64748b;font-size:.85rem}

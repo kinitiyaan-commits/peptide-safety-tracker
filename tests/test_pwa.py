@@ -51,7 +51,39 @@ class TestServiceWorker:
         assert "addEventListener(\"install\"" in sw
         assert "addEventListener(\"fetch\"" in sw
         assert "./index.html" in sw            # offline navigation fallback
-        assert "cdn.tailwindcss.com" in sw     # cross-origin dep is precached
+
+    def test_no_remote_styling_dependency(self):
+        """Styling is local and versioned — no CDN runtime dependency."""
+        html = (PWA / "index.html").read_text()
+        assert "cdn.tailwindcss.com" not in html
+        assert "cdn.tailwindcss.com" not in (PWA / "sw.js").read_text()
+        assert (PWA / "styles.css").is_file()
+        assert '<link rel="stylesheet" href="./styles.css">' in html
+        assert re.search(r'Version \d', (PWA / "styles.css").read_text())
+
+    def test_controlled_update_strategy(self):
+        """Strict install; no auto-skipWaiting; only own caches deleted."""
+        sw = (PWA / "sw.js").read_text()
+        install = sw.split("addEventListener(\"install\"", 1)[1].split("addEventListener(\"message\"", 1)[0]
+        assert "addAll" in install and "cache.addAll(ASSETS)" in sw
+        assert install.count("catch") == 0     # no swallowed asset failures
+        # skipWaiting exists ONLY behind the ACCEPT_UPDATE message
+        msg = sw.split("addEventListener(\"message\"", 1)[1].split("addEventListener(\"activate\"", 1)[0]
+        assert "ACCEPT_UPDATE" in msg and "skipWaiting" in msg
+        head = sw.split("addEventListener(\"message\"", 1)[0]
+        assert "skipWaiting()" not in head
+        act = sw.split("addEventListener(\"activate\"", 1)[1]
+        assert "CACHE_PREFIX" in act and "startsWith(CACHE_PREFIX)" in act
+
+    def test_privacy_and_terms_pages_precached(self):
+        for name in ("privacy.html", "terms.html"):
+            f = (PWA / name)
+            assert f.is_file(), f"missing pwa/{name}"
+            text = f.read_text()
+            assert "OWNER TO CONFIRM" in text      # placeholders visible
+            assert "not medical advice" in text or "Not medical advice" in text or "medical" in text
+        sw = (PWA / "sw.js").read_text()
+        assert '"./privacy.html"' in sw and '"./terms.html"' in sw
 
     def test_no_external_api_calls_in_app(self):
         """No server API for user data — storage is IndexedDB only."""
@@ -253,10 +285,11 @@ class TestDataPreservation:
         app = (PWA / "app.js").read_text()
         assert "update-banner" in app
         assert "updatefound" in app
-        # the only location.reload() lives in the explicit user button handler
-        assert app.count("location.reload()") == 1
-        body = app.split("function applyUpdate", 1)[1].split("\n}", 1)[0]
-        assert "location.reload()" in body
+        # location.reload() exists ONLY inside the controlled update flow:
+        # inside applyUpdate and the one-time controllerchange reload.
+        assert app.count("location.reload()") == 2
+        update_flow = app.split("if (\"serviceWorker\" in navigator)", 1)[1]
+        assert update_flow.count("location.reload()") == 2
 
     def test_import_leaves_data_intact_on_failure(self):
         app = (PWA / "app.js").read_text()
@@ -288,11 +321,13 @@ class TestInstallAccessibilityFeedback:
         assert "Offline limitations" in settings
 
     def test_feedback_route_warns_against_health_data(self):
-        html = (PNA := PWA / "index.html").read_text()
+        html = (PWA / "index.html").read_text()
         settings = html.split('id="sec-settings"', 1)[1].split("</section>", 1)[0]
         assert "Feedback" in settings
-        assert "do <strong>not</strong> include medical records" in settings
+        warning = settings.split("Privacy warning", 1)[1].split("</p>", 1)[0]
+        assert "include medical records" in warning
         assert "never attaches data to feedback automatically" in settings
+        assert "pending the owner's decision" in settings
 
     def test_no_auto_attachment_anywhere(self):
         app = (PWA / "app.js").read_text()
@@ -344,3 +379,148 @@ class TestAppointmentSummary:
         body = app.split("function printSummary", 1)[1].split("\nfunction downloadSummary", 1)[0]
         assert "window.open" in body          # user-initiated print only
         assert "fetch(" not in body and "sendBeacon" not in body
+
+
+# ------------------------- pre-Reddit blockers (2026-11-15) ----------------
+
+class TestAtomicImport:
+    """Imports are fully validated first, then written in ONE transaction."""
+
+    def _app(self):
+        return (PWA / "app.js").read_text()
+
+    def _store(self):
+        return (PWA / "store.js").read_text()
+
+    def test_atomic_transaction_helper_exists(self):
+        store = self._store()
+        assert "importAtomic" in store
+        body = store.split("importAtomic(writes, clearStores)", 1)[1].split("},", 1)[0]
+        assert 'db.transaction(names, "readwrite")' in body
+        assert "t.onabort" in body and "t.onerror" in body
+        # no await between queued requests
+        assert "await" not in body
+
+    def test_import_revalidates_before_apply(self):
+        app = self._app()
+        body = app.split("async function runImport", 1)[1].split("\n}", 1)[0]
+        assert "validateExport(data)" in body
+        assert "importAtomic" in body
+
+    def test_replace_is_atomic_not_wipe_then_write(self):
+        app = self._app()
+        body = app.split("async function runImport", 1)[1].split("\n}", 1)[0]
+        # replace wipes stores INSIDE the same transaction (clearStores),
+        # not via wipeAllData() before writing
+        assert "clearStores" in body
+        assert "wipeAllData" not in body
+
+    def test_strict_validation_limits(self):
+        app = self._app()
+        assert "IMPORT_ID_RE" in app and "^[A-Za-z0-9_-]{1,64}$" in app
+        assert "IMPORT_LIMITS" in app
+        assert "2 * 1024 * 1024" in app        # 2 MB file cap in importFile
+        assert "Number.isFinite(Number(r.amount))" in app
+        assert "validISODate" in app
+        # cross-profile id collisions and duplicate profile ids are fatal
+        assert "more than one profile" in app
+        assert "Duplicate profile id" in app
+
+    def test_schema_2_export_includes_product_units(self):
+        app = self._app()
+        assert "schema: 2" in app
+        assert "productUnits" in app.split("function exportData", 1)[1].split("function validateExport", 1)[0]
+        # schema-1 imports rebuild remembered units from most recent usage
+        assert 'data.schema === 1' in app and "rememberUnit" in app
+
+    def test_import_preview_sensitivity_note(self):
+        app = self._app()
+        assert "Sensitivity: this file contains private health notes" in app
+
+
+class TestNoImportedIdXSS:
+    """Record ids from imports must never be interpolated into inline
+    handlers — buttons use data-act/data-id with a delegated listener."""
+
+    def _app(self):
+        return (PWA / "app.js").read_text()
+
+    def test_delegated_actions_replace_inline_ids(self):
+        app = self._app()
+        assert "DELEGATED_ACTIONS" in app
+        assert 'data-act="log-again" data-id="${esc(u.id)}"' in app
+        assert 'data-act="correct-dose"' in app
+        assert 'data-act="correct-obs"' in app
+        assert 'data-act="toggle-reminder" data-id="${esc(r.id)}"' in app
+
+    def test_no_inline_handlers_interpolate_record_ids(self):
+        app = self._app()
+        # any onclick="fn('...id...')" pattern is forbidden
+        assert not re.search(r"onclick=\"\w+\('\$\{[uo]\.id\}", app)
+        assert not re.search(r"onclick=\"\w+\('\$\{r\.id\}", app)
+
+    def test_esc_is_quote_safe_for_attributes(self):
+        app = self._app()
+        assert "&quot;" in app and "&#39;" in app
+
+
+class TestStaleUnitLookupGuard:
+    def test_async_lookup_checked_against_current_state(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function onProductChanged", 1)[1].split("\n}", 1)[0]
+        assert "unitLookupToken" in app
+        assert "token !== unitLookupToken" in body
+        assert '$("#u-name").value.trim() !== name' in body
+
+
+class TestBackupWordingAndSummaryDates:
+    def test_last_export_wording_is_honest(self):
+        app = (PWA / "app.js").read_text()
+        assert "Last export initiated" in app
+        assert "verify the downloaded copy" in app or "verify it opens" in app
+        assert "Last successful backup" not in app
+
+    def test_reversed_range_rejected_everywhere(self):
+        app = (PWA / "app.js").read_text()
+        assert "summaryRangeError" in app
+        for fn in ("renderSummaryPreview", "printSummary", "downloadSummary"):
+            seg = app.split(f"function {fn}", 1)[1].split("\nfunction ", 1)[0]
+            assert "summaryRangeError" in seg, f"{fn} does not reject a bad range"
+
+    def test_summary_sensitivity_note_even_without_notes(self):
+        app = (PWA / "app.js").read_text()
+        assert "Sensitive: this summary can contain health information" in app
+
+    def test_summary_uses_local_calendar_days(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function summaryData", 1)[1].split("function ", 1)[0]
+        assert "localDTtoDay" in body
+        assert "reversed" in body
+
+
+class TestAccuratePrivacyWording:
+    def _html(self):
+        return (PWA / "index.html").read_text()
+
+    def test_no_never_transmits_claims(self):
+        html = self._html()
+        assert "never transmits anything" not in html
+        assert "GitHub receives your IP address" in html
+        # external links may include the searched product term
+        assert "include the product name you're checking" in html
+
+    def test_no_age_collection(self):
+        html = self._html()
+        assert "new-profile-age" not in html
+        assert "Age (optional)" not in html
+
+    def test_feedback_destination_pending_owner(self):
+        html = self._html()
+        assert "pending the owner's decision" in html
+        assert "public" in html.split("Privacy warning", 1)[1].split("</p>", 1)[0]
+
+    def test_drugsfda_link_in_verification(self):
+        app = (PWA / "app.js").read_text()
+        assert "accessdata.fda.gov/scripts/cder/daf" in app
+        assert "check approval per exact product" in app
+        assert 'data.js' not in "x"  # sanity

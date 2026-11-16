@@ -33,7 +33,9 @@ const DISCLAIMER =
 
 // ---------------- tiny helpers ----------------
 const $ = (sel) => document.querySelector(sel);
-const esc = (s) => { const d = document.createElement("div"); d.textContent = s ?? ""; return d.innerHTML; };
+const esc = (s) => { const d = document.createElement("div"); d.textContent = s ?? "";
+  // quotes are escaped too so the result is safe inside attributes
+  return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;"); };
 const uid = () => "e_" + crypto.randomUUID();
 const nowISO = () => new Date().toISOString();
 const localDT = () => {
@@ -91,10 +93,14 @@ async function init() {
     $("#first-run").classList.remove("hidden");
   }
   if ("serviceWorker" in navigator) {
+    // Controlled updates: the new worker stays "waiting" until the user
+    // taps "Reload & update" — an unfinished form is never interrupted.
     navigator.serviceWorker.register("./sw.js").then(reg => {
-      // "Update available" prompt (backlog): shown as a banner the user can
-      // act on whenever they choose — it never reloads the page by itself,
-      // so an unfinished form can never be interrupted.
+      // An update may already be waiting from an earlier session — detect it.
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        $("#update-banner").classList.remove("hidden");
+      }
+      // Detect a newly discovered update.
       reg.addEventListener("updatefound", () => {
         const nw = reg.installing;
         if (!nw) return;
@@ -105,19 +111,137 @@ async function init() {
         });
       });
     }).catch(() => {});
+    // Reload exactly once, after the waiting worker has taken over.
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      reloadedFlag = true;
+      location.reload();
+    });
   }
   await loadAll();
   window.addEventListener("online", () => $("#offline-badge").classList.add("hidden"));
   window.addEventListener("offline", () => $("#offline-badge").classList.remove("hidden"));
   if (!navigator.onLine) $("#offline-badge").classList.remove("hidden");
+  restoreDraft();
+  // Surface a blocked DB upgrade (another tab holds an old connection).
+  Store.onBlocked = (err) =>
+    toast(err && err.message ? err.message :
+      "A data update is waiting — close this app in other tabs, then reload.", true);
+}
+
+// ---- unsaved-form draft preservation for updates ----
+// Before reloading for an update, capture anything typed into an open
+// sheet (log / symptom / observation forms, appointment summary) so the
+// user can cancel the update or keep their draft.
+function collectDraft() {
+  const draft = {};
+  const grab = (id) => { const el = $(id); return el ? el.value : ""; };
+  if (!$("#log-sheet").classList.contains("hidden")) {
+    draft.sheet = "log";
+    draft.data = { name: grab("#u-name"), amount: grab("#u-amount"),
+      unit: grab("#u-unit"), when: grab("#u-when"), notes: grab("#u-notes") };
+    draft.title = $("#log-sheet-title").textContent;
+  } else if (!$("#symptom-sheet").classList.contains("hidden")) {
+    draft.sheet = "symptom";
+    draft.data = { name: grab("#s-name"), desc: grab("#s-desc"),
+      severity: grab("#s-severity") };
+  } else if (!$("#observation-sheet").classList.contains("hidden")) {
+    draft.sheet = "observation";
+    draft.data = { when: grab("#o-when"), notes: grab("#o-notes"),
+      goals: collectGoalData() };
+  } else if (!$("#summary-sheet").classList.contains("hidden")) {
+    draft.sheet = "summary";
+    draft.data = { from: grab("#sum-from"), to: grab("#sum-to"),
+      includeNotes: $("#sum-notes").checked, questions: grab("#sum-questions") };
+  }
+  // dynamic observation goal fields (.gf inputs) are inside the
+  // observation sheet and captured via collectGoalData() above.
+  return draft.sheet ? draft : null;
+}
+
+function draftHasContent(d) {
+  if (!d) return false;
+  const v = d.data || {};
+  return Object.values(v).some(x =>
+    typeof x === "string" ? x.trim() !== "" : !!x);
+}
+
+function captureDraftForUpdate() {
+  const d = collectDraft();
+  if (!d || !draftHasContent(d)) return true;   // nothing to lose
+  try { sessionStorage.setItem("pwa-draft", JSON.stringify(d)); } catch (e) {}
+  return confirm(
+    "An update is ready. You have an unfinished entry open.\n\n" +
+    "\"OK\" saves your draft and reloads (it will be restored after the " +
+    "update). \"Cancel\" keeps working without updating now.");
 }
 
 function applyUpdate() {
   // Only runs when the user taps "Reload & update" — never automatically.
-  // Records live in IndexedDB and are untouched by reloading or updating.
-  location.reload();
+  if (!captureDraftForUpdate()) { dismissUpdate(); return; }
+  const reg = navigator.serviceWorker && navigator.serviceWorker.controller;
+  const banner = $("#update-banner");
+  banner.querySelector("p").textContent = "Updating — reloading…";
+  if (reg) reg.postMessage({ type: "ACCEPT_UPDATE" });
+  // controllerchange reloads once the new worker takes over; if there is
+  // no waiting worker (banner stale), reload directly after a short grace
+  // period instead of hanging forever.
+  setTimeout(() => { if (!reloadedFlag) location.reload(); }, 1500);
 }
+let reloadedFlag = false;
 function dismissUpdate() { $("#update-banner").classList.add("hidden"); }
+
+// Restore a draft saved before an update reload. Runs after init so the
+// sheets exist; only restores what the user had typed, nothing else.
+function restoreDraft() {
+  let raw = null;
+  try { raw = sessionStorage.getItem("pwa-draft"); } catch (e) {}
+  if (!raw) return;
+  try { sessionStorage.removeItem("pwa-draft"); } catch (e) {}
+  let d;
+  try { d = JSON.parse(raw); } catch (e) { return; }
+  if (!d || !d.sheet || !d.data) return;
+  setTimeout(() => {
+    if (d.sheet === "log") {
+      openLogSheet(null);
+      $("#log-sheet-title").textContent = d.title || "Log a dose";
+      $("#u-name").value = d.data.name || "";
+      $("#u-amount").value = d.data.amount || "";
+      $("#u-unit").value = UNITS.includes(d.data.unit) ? d.data.unit : "";
+      $("#u-when").value = d.data.when || "";
+      $("#u-notes").value = d.data.notes || "";
+      lastLockedProduct = d.data.name || "";
+      showUnitHint(d.data.name, d.data.unit);
+      toast("Your unfinished entry was restored after the update.");
+    } else if (d.sheet === "symptom") {
+      openSymptomSheet();
+      $("#s-name").value = d.data.name || "";
+      $("#s-desc").value = d.data.desc || "";
+      $("#s-severity").value = ["1","2","3","4","5"].includes(d.data.severity)
+        ? d.data.severity : "3";
+      toast("Your unfinished symptom entry was restored after the update.");
+    } else if (d.sheet === "observation") {
+      openObservationSheet();
+      $("#o-when").value = d.data.when || "";
+      $("#o-notes").value = d.data.notes || "";
+      if (d.data.goals) {
+        for (const [k, v] of Object.entries(d.data.goals)) {
+          const el = document.querySelector(
+            `#observation-fields .gf[data-gkey="${CSS.escape(k)}"]`);
+          if (el) el.value = v;
+        }
+      }
+      toast("Your unfinished observation was restored after the update.");
+    } else if (d.sheet === "summary") {
+      openSummarySheet();
+      $("#sum-from").value = d.data.from || "";
+      $("#sum-to").value = d.data.to || "";
+      $("#sum-notes").checked = !!d.data.includeNotes;
+      $("#sum-questions").value = d.data.questions || "";
+      renderSummaryPreview();
+      toast("Your appointment summary draft was restored after the update.");
+    }
+  }, 400);
+}
 
 async function loadAll() {
   if (!profile) return;
@@ -158,7 +282,7 @@ function renderToday() {
           ${u.notes ? `<div class="text-xs text-slate-500">${esc(u.notes)}</div>` : ""}
         </div>
         <div class="text-right shrink-0"><span class="text-xs text-slate-500">${fmtWhen(u.takenAt)}</span>
-          <button onclick="logAgain('${u.id}')" class="block text-xs text-emerald-400 underline">Log again</button></div>
+          <button data-act="log-again" data-id="${esc(u.id)}" class="block text-xs text-emerald-400 underline">Log again</button></div>
       </div>`).join("")
     : `<p class="text-xs text-slate-500">Nothing logged yet today or earlier for this profile.</p>`;
   $("#today-reminders").innerHTML = due.length
@@ -232,18 +356,33 @@ function showUnitHint(name, unit) {
   } else hint.classList.add("hidden");
 }
 
+// Monotonic token guarding the async remembered-unit lookup: a slow result
+// for an earlier product must never overwrite a newer state (e.g. the user
+// cleared the field or switched products while the lookup was in flight).
+let unitLookupToken = 0;
+
 async function onProductChanged() {
   const form = $("#log-sheet form");
   if (!form || $("#log-sheet").classList.contains("hidden")) return;
   const name = $("#u-name").value.trim();
   if (name.toLowerCase() === lastLockedProduct.toLowerCase()) return;
   lastLockedProduct = name;
+  const token = ++unitLookupToken;      // profile/product/sheet-instance token
+  const forProfile = profile.id;
+  const sheetEpoch = form.dataset.idem;
   if (editingUsageId) return;   // corrections keep the entry's original unit
   // changing products does not carry over an unrelated unit
   $("#u-unit").value = "";
   $("#u-unit-hint").classList.add("hidden");
   if (name) {
-    const remembered = await Store.rememberedUnit(profile.id, name);
+    const remembered = await Store.rememberedUnit(forProfile, name);
+    // apply ONLY if nothing newer happened: same open sheet, same product
+    if (token !== unitLookupToken ||
+        $("#log-sheet").classList.contains("hidden") ||
+        form.dataset.idem !== sheetEpoch ||
+        $("#u-name").value.trim() !== name) {
+      return;                    // stale result — discard it
+    }
     if (remembered) {
       $("#u-unit").value = remembered;
       showUnitHint(name, remembered);
@@ -530,8 +669,8 @@ function renderHistory() {
             ${correctionHtml(u.corrections, USAGE_PREV)}
           </div>
           <div class="text-right shrink-0"><p class="text-xs text-slate-500">${fmtWhen(u.takenAt)}</p>
-            <button onclick="logAgain('${u.id}')" class="text-xs text-emerald-400 underline">Log again</button> ·
-            <button onclick="openLogSheet('${u.id}')" class="text-xs text-emerald-400 underline">Correct</button></div>
+            <button data-act="log-again" data-id="${esc(u.id)}" class="text-xs text-emerald-400 underline">Log again</button> ·
+            <button data-act="correct-dose" data-id="${esc(u.id)}" class="text-xs text-emerald-400 underline">Correct</button></div>
         </div></div>`;
     }
     if (r.kind === "symptom") {
@@ -553,7 +692,7 @@ function renderHistory() {
           ${correctionHtml(o.corrections, OBS_PREV)}
         </div>
         <div class="text-right shrink-0"><p class="text-xs text-slate-500">${fmtWhen(o.takenAt)}</p>
-          <button onclick="openObservationSheet('${o.id}')" class="text-xs text-sky-400 underline">Correct</button></div>
+          <button data-act="correct-obs" data-id="${esc(o.id)}" class="text-xs text-sky-400 underline">Correct</button></div>
       </div></div>`;
   }).join("")
     : `<p class="text-sm text-slate-500">No matching entries.</p>`;
@@ -585,9 +724,10 @@ function verifyLinks(name) {
   $("#verify-result").innerHTML = `
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
       <p class="text-sm font-semibold">Verification links for "${esc(name)}"</p>
-      <p class="text-xs text-slate-400">Links only — the app never interprets results and never rates a brand. Verify licensure, prescription status, and the exact product yourself.</p>
+      <p class="text-xs text-slate-400">Links only — the app never interprets results and never rates a brand. Verify licensure, prescription status, and the exact product yourself. Approval wording in this app is ingredient-level ("approved products exist"); whether one specific product is approved is checked per exact product in Drugs@FDA — DailyMed shows labeling only and also lists unapproved products. These links include the product name you're checking in their address.</p>
       <ul class="text-xs space-y-1 list-disc pl-4">
         <li><a class="text-emerald-400 underline" target="_blank" rel="noopener" href="https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=${q}">DailyMed label search</a></li>
+        <li><a class="text-emerald-400 underline" target="_blank" rel="noopener" href="https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?fuseaction=Search.SearchResults&Query.Name=${q}">Drugs@FDA — check approval per exact product</a></li>
         <li><a class="text-emerald-400 underline" target="_blank" rel="noopener" href="https://open.fda.gov/data/drug/">openFDA drug records</a></li>
         <li><a class="text-emerald-400 underline" target="_blank" rel="noopener" href="https://www.fda.gov/drugs/human-drug-compounding">FDA human drug compounding</a></li>
         <li><a class="text-emerald-400 underline" target="_blank" rel="noopener" href="https://www.fda.gov/consumers/buying-medicine-online">FDA: Buying Medicine Online</a></li>
@@ -609,9 +749,9 @@ const SUMMARY_DISCLAIMER =
   "recorded, not that nothing happened.";
 
 function openSummarySheet() {
-  $("#sum-from").value = localDT().slice(0, 10) &&
-    new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  $("#sum-to").value = localDT().slice(0, 10);
+  const today = localDTtoDay(new Date());
+  $("#sum-from").value = localDTtoDay(new Date(Date.now() - 30 * 86400000));
+  $("#sum-to").value = today;
   $("#sum-notes").checked = false;
   $("#sum-questions").value = "";
   renderSummaryPreview();
@@ -623,17 +763,34 @@ function summaryData() {
   const from = $("#sum-from").value;
   const to = $("#sum-to").value;
   const includeNotes = $("#sum-notes").checked;
+  // dates entered as local calendar days; entries compared by their LOCAL
+  // calendar day (consistent with the History date filters)
+  const reversed = !!from && !!to && from > to;
   const inRange = (iso) => {
     if (!iso) return false;
     const day = localDTtoDay(new Date(iso));
     return (!from || day >= from) && (!to || day <= to);
   };
-  const usage = lastUsage.filter(u => inRange(u.takenAt));
-  const symptoms = lastSymptoms.filter(s => inRange(s.loggedAt));
-  const observations = lastObservations.filter(o => inRange(o.takenAt));
+  const usage = reversed ? [] : lastUsage.filter(u => inRange(u.takenAt));
+  const symptoms = reversed ? [] : lastSymptoms.filter(s => inRange(s.loggedAt));
+  const observations = reversed ? [] : lastObservations.filter(o => inRange(o.takenAt));
   const questions = $("#sum-questions").value.trim();
-  return { from, to, includeNotes, usage, symptoms, observations, questions };
+  return { from, to, includeNotes, usage, symptoms, observations, questions, reversed };
 }
+
+function summaryRangeError(d) {
+  if (d.reversed) {
+    return "The From date is after the To date — swap them, then review again.";
+  }
+  if (!d.from && !d.to) {
+    return "Choose at least one date so the summary matches a clear period.";
+  }
+  return null;
+}
+
+const SUMMARY_SENSITIVITY =
+  "Sensitive: this summary can contain health information. Keep it private " +
+  "— share it only with the clinician or people you choose.";
 
 function summaryHtmlText(d) {
   const esc2 = esc;
@@ -664,11 +821,20 @@ function summaryHtmlText(d) {
   if (obsLines.length) out += `<h2>Measurements and observations</h2><ul>${obsLines.join("")}</ul>`;
   if (d.questions) out += `<h2>Questions I want to ask</h2><ul>${d.questions.split(/\n+/).map(q => `<li>${esc2(q)}</li>`).join("")}</ul>`;
   if (!d.includeNotes) out += `<p class="muted">Private notes were excluded by choice (option not selected).</p>`;
+  out += `<p class="muted">${esc(SUMMARY_SENSITIVITY)}</p>`;
   return out;
 }
 
 function renderSummaryPreview() {
   const d = summaryData();
+  const rangeError = summaryRangeError(d);
+  if (rangeError) {
+    $("#sum-preview").innerHTML = `
+      <div class="bg-amber-950/40 border border-amber-900/60 rounded-xl p-4">
+        <p class="text-xs text-amber-200">${esc(rangeError)}</p>
+      </div>`;
+    return;
+  }
   const count = d.usage.length + d.symptoms.length + d.observations.length;
   $("#sum-preview").innerHTML = `
     <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-1 text-sm max-h-72 overflow-y-auto">
@@ -697,6 +863,8 @@ function summaryDocHtml(d) {
 
 function printSummary() {
   const d = summaryData();
+  const rangeError = summaryRangeError(d);
+  if (rangeError) { toast(rangeError, true); return; }
   const w = window.open("", "_blank");
   if (!w) { toast("Allow pop-ups to print the summary", true); return; }
   w.document.write(summaryDocHtml(d));
@@ -706,6 +874,8 @@ function printSummary() {
 
 function downloadSummary() {
   const d = summaryData();
+  const rangeError = summaryRangeError(d);
+  if (rangeError) { toast(rangeError, true); return; }
   const blob = new Blob([summaryDocHtml(d)], { type: "text/html" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -778,8 +948,8 @@ async function renderSettings() {
         <span class="text-xs text-slate-400 ml-2">${esc(r.timeOfDay)} · ${esc(r.days)}</span>
         ${r.enabled === false ? `<span class="text-xs text-slate-500 ml-2">paused</span>` : ""}</div>
       <div class="flex gap-2 shrink-0">
-        <button onclick="toggleReminder('${r.id}', ${r.enabled === false})" class="text-xs text-emerald-400 underline">${r.enabled === false ? "Resume" : "Pause"}</button>
-        <button onclick="deleteReminder('${r.id}')" class="text-xs text-slate-400 underline">Delete</button>
+        <button data-act="toggle-reminder" data-id="${esc(r.id)}" class="text-xs text-emerald-400 underline">${r.enabled === false ? "Resume" : "Pause"}</button>
+        <button data-act="delete-reminder" data-id="${esc(r.id)}" class="text-xs text-slate-400 underline">Delete</button>
       </div>
     </div>`).join("")
     : `<p class="text-xs text-slate-500">No reminders. Reminders are user-configured and <strong>in-app only</strong> — they never deliver when this app is closed.</p>`;
@@ -790,7 +960,7 @@ async function renderSettings() {
   const last = await Store.getMeta("lastBackupAt");
   const dismissedAt = await Store.getMeta("backupReminderDismissedAt");
   $("#last-backup").textContent = last
-    ? `Last successful backup: ${fmtWhen(last)}`
+    ? `Last export initiated: ${fmtWhen(last)} — the app cannot see the file, so verify the downloaded copy opens and keep it somewhere safe.`
     : "No backup made yet on this device.";
   const daysSince = last ? Math.floor((Date.now() - new Date(last)) / 86400000) : null;
   const dismissed = dismissedAt && (Date.now() - new Date(dismissedAt)) < 7 * 86400000;
@@ -799,8 +969,8 @@ async function renderSettings() {
   $("#backup-dismiss").classList.toggle("hidden", !showReminder);
   if (showReminder) {
     $("#backup-reminder").textContent = daysSince === null
-      ? "Reminder: make a backup (Export) so a browser reset can't take your records with it."
-      : `It has been ${daysSince} days since your last backup — consider exporting a fresh copy.`;
+      ? "Reminder: make a backup (Export) so a browser reset can't take your records with it. After exporting, verify the downloaded file opens."
+      : `It has been ${daysSince} days since your last export — consider downloading a fresh copy and verifying it opens.`;
   }
 }
 
@@ -842,7 +1012,7 @@ function exportData() {
   return Store.profiles().then(async profiles => {
     const data = {
       app: "peptide-safety-tracker",
-      schema: 1,
+      schema: 2,   // 2 = includes remembered productUnits per profile
       exportedAt: nowISO(),
       disclaimer: "User-entered journal data. Not medical advice; not verified by this app. Keep private.",
       profiles: [],
@@ -855,6 +1025,8 @@ function exportData() {
         symptoms: (await Store.byProfile("symptoms", p.id)).map(r => ({ ...r })),
         observations: (await Store.byProfile("observations", p.id)).map(r => ({ ...r })),
         reminders: (await Store.byProfile("reminders", p.id)).map(r => ({ ...r })),
+        productUnits: (await Store.getAll("productUnits"))
+          .filter(u => u.profileId === p.id).map(u => ({ ...u })),
       });
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -864,53 +1036,158 @@ function exportData() {
     a.click();
     URL.revokeObjectURL(a.href);
     await Store.setMeta("lastBackupAt", nowISO());
-    toast("✓ Backup downloaded — keep the file private");
+    toast("✓ Backup file downloaded — verify it opens, then keep it private");
     await renderSettings();
     return data;
   });
 }
 
+const IMPORT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const IMPORT_LIMITS = {
+  profiles: 50, usage: 5000, symptoms: 5000, observations: 5000,
+  reminders: 500, productUnits: 2000,
+};
+const IMPORT_TOTAL_LIMIT = 12000;
+
+function validISODate(v) {
+  return typeof v === "string" && v.length <= 40 &&
+    !Number.isNaN(new Date(v).getTime());
+}
+
 function validateExport(data) {
-  // Returns {ok, errors[], counts} — strict enough to refuse junk, loose
-  // enough to accept legit exports from any version with schema 1.
+  // Returns {ok, errors[], counts} — strict enough to refuse junk and
+  // malicious files, loose enough to accept legit exports from this app
+  // (schema 1 and 2). Everything is validated BEFORE anything is written.
   const errors = [];
-  if (!data || typeof data !== "object") return { ok: false, errors: ["Not an object"], counts: null };
-  if (data.app !== "peptide-safety-tracker") errors.push("Not an export of this app (wrong app id).");
-  if (data.schema !== 1) errors.push("Unknown export schema version.");
-  if (!Array.isArray(data.profiles) || !data.profiles.length) errors.push("No profiles in export.");
-  const counts = { profiles: 0, usage: 0, symptoms: 0, observations: 0, reminders: 0 };
-  if (data.profiles && typeof data.profiles[Symbol.iterator] === "function") {
+  const fatal = (m) => errors.push(m);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return { ok: false, errors: ["Not an object"], counts: null };
+  }
+  if (data.app !== "peptide-safety-tracker") {
+    fatal("Not an export of this app (wrong app id).");
+  }
+  if (data.schema !== 1 && data.schema !== 2) {
+    fatal("Unknown export schema version.");
+  }
+  if (!Array.isArray(data.profiles) || !data.profiles.length) {
+    fatal("No profiles in export.");
+  }
+  const counts = { profiles: 0, usage: 0, symptoms: 0, observations: 0,
+                   reminders: 0, productUnits: 0 };
+  let total = 0;
+  const profileIds = new Set();
+  const seenIds = new Map();     // "store:id" -> owning profileId
+  const checks = [
+    ["usage", "usage", r => typeof r.peptideName === "string" &&
+        r.peptideName.length > 0 && r.peptideName.length <= 200 &&
+        Number.isFinite(Number(r.amount)) && Number(r.amount) > 0 &&
+        Number(r.amount) < 1e12 && UNITS.includes(r.unit) &&
+        validISODate(r.takenAt)],
+    ["symptoms", "symptoms", r => typeof r.peptideName === "string" &&
+        r.peptideName.length <= 200 &&
+        typeof r.description === "string" && r.description.length <= 2000 &&
+        Number.isInteger(r.severity) && r.severity >= 1 && r.severity <= 5 &&
+        validISODate(r.loggedAt)],
+    ["observations", "observations", r => validISODate(r.takenAt) &&
+        (r.notes === undefined || (typeof r.notes === "string" &&
+          r.notes.length <= 2000))],
+    ["reminders", "reminders", r => typeof r.peptideName === "string" &&
+        r.peptideName.length <= 200 &&
+        /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+  ];
+  if (Array.isArray(data.profiles)) {
+    if (data.profiles.length > IMPORT_LIMITS.profiles) {
+      fatal(`Too many profiles in export (limit ${IMPORT_LIMITS.profiles}).`);
+    }
     for (const block of data.profiles) {
-      if (!block || !block.profile || !block.profile.id || !block.profile.name) {
-        errors.push("A profile block is missing its id or name."); continue;
+      if (!block || typeof block !== "object" || !block.profile ||
+          !block.profile.id || !block.profile.name ||
+          !IMPORT_ID_RE.test(String(block.profile.id)) ||
+          String(block.profile.name).length > 80) {
+        fatal("A profile block is missing its id or name (or the id/name is malformed).");
+        continue;
       }
+      if (profileIds.has(block.profile.id)) {
+        fatal(`Duplicate profile id in export (${block.profile.id}).`);
+        continue;
+      }
+      profileIds.add(block.profile.id);
       counts.profiles++;
-      for (const [key, store, check] of [
-        ["usage", "usage", r => Number(r.amount) > 0 && UNITS.includes(r.unit)],
-        ["symptoms", "symptoms", r => r.severity >= 1 && r.severity <= 5],
-        ["observations", "observations", () => true],
-        ["reminders", "reminders", r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
-      ]) {
-        if (!Array.isArray(block[key])) { errors.push(`${key} list missing for ${block.profile.name}.`); continue; }
+      for (const [key, store, check] of checks) {
+        if (!Array.isArray(block[key])) {
+          fatal(`${key} list missing for ${String(block.profile.name)}.`);
+          continue;
+        }
+        if (block[key].length > IMPORT_LIMITS[key]) {
+          fatal(`Too many ${key} records for ${String(block.profile.name)} (limit ${IMPORT_LIMITS[key]}).`);
+          continue;
+        }
         for (const r of block[key]) {
-          if (!r || !r.id) { errors.push(`${key}: record without id.`); continue; }
-          if (!check(r)) errors.push(`${key} (${r.id}): invalid ${key === "usage" ? "amount/unit" : key === "symptoms" ? "severity" : "value"} — record skipped on import.`);
-          else counts[key]++;
+          if (!r || typeof r !== "object" || !r.id ||
+              !IMPORT_ID_RE.test(String(r.id))) {
+            errors.push(`${key}: record without a valid id — record skipped on import.`);
+            continue;
+          }
+          const seenKey = store + ":" + r.id;
+          if (seenIds.has(seenKey)) {
+            // the same record id under two profiles would make profileId
+            // ambiguous — refuse the whole import instead
+            fatal(`${key} (${r.id}): the same record id appears under more than one profile in this file.`);
+          } else {
+            seenIds.set(seenKey, block.profile.id);
+          }
+          total++;
+          if (!check(r)) {
+            errors.push(`${key} (${r.id}): invalid ${key === "usage" ? "amount/unit/date" : key === "symptoms" ? "severity/date" : "value"} — record skipped on import.`);
+          } else {
+            counts[key]++;
+          }
         }
       }
-      if (Array.isArray(block.goals)) {
-        block.goals = block.goals.filter(k => GOALS[k]);
+      if (data.schema === 2) {
+        // remembered product units (schema 2 only)
+        if (block.productUnits !== undefined) {
+          if (!Array.isArray(block.productUnits)) {
+            fatal(`productUnits list invalid for ${String(block.profile.name)}.`);
+          } else if (block.productUnits.length > IMPORT_LIMITS.productUnits) {
+            fatal(`Too many productUnits for ${String(block.profile.name)} (limit ${IMPORT_LIMITS.productUnits}).`);
+          } else {
+            for (const u of block.productUnits) {
+              if (!u || typeof u !== "object" || !u.id ||
+                  !IMPORT_ID_RE.test(String(u.id)) ||
+                  typeof u.name !== "string" || !u.name ||
+                  u.name.length > 200 || !UNITS.includes(u.unit)) {
+                errors.push("productUnits: invalid entry — skipped on import.");
+                continue;
+              }
+              counts.productUnits++;
+            }
+          }
+        }
       }
     }
   }
-  return { ok: errors.filter(e => e.startsWith("Not") || e.startsWith("Unknown") || e.startsWith("No profiles") || e.includes("missing")).length === 0,
-           errors, counts };
+  if (total > IMPORT_TOTAL_LIMIT) {
+    fatal(`Export too large (limit ${IMPORT_TOTAL_LIMIT} records).`);
+  }
+  const bad = errors.filter(e =>
+    e.startsWith("Not") || e.startsWith("Unknown") ||
+    e.startsWith("No profiles") || e.includes("missing") ||
+    e.startsWith("Duplicate") || e.includes("more than one profile") ||
+    e.startsWith("Too many") || e.startsWith("Export too large"));
+  return { ok: bad.length === 0, errors, counts };
 }
 
 async function importFile(file) {
   let text;
   try { text = await file.text(); }
   catch { toast("Could not read the file", true); return; }
+  if (text.length > 2 * 1024 * 1024) {
+    showImportPreview({ ok: false,
+      errors: ["File is larger than 2 MB — not a backup this app would produce."],
+      counts: null });
+    return;
+  }
   let data;
   try { data = JSON.parse(text); }
   catch { showImportPreview({ ok: false, errors: ["The file is not valid JSON."], counts: null }); return; }
@@ -932,8 +1209,9 @@ function showImportPreview(v, data) {
   box.classList.remove("hidden");
   box.innerHTML = `<div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
     <p class="text-sm font-bold">Import preview</p>
-    <p class="text-xs text-slate-300">${v.counts.profiles} profile(s): ${v.counts.usage} doses, ${v.counts.symptoms} symptoms, ${v.counts.observations} observations, ${v.counts.reminders} reminders.</p>
+    <p class="text-xs text-slate-300">${v.counts.profiles} profile(s): ${v.counts.usage} doses, ${v.counts.symptoms} symptoms, ${v.counts.observations} observations, ${v.counts.reminders} reminders${data && data.schema === 2 ? `, ${v.counts.productUnits} remembered units` : ""}.</p>
     ${v.errors.length ? `<p class="text-xs text-amber-300">${v.errors.length} record(s) failed validation and will be skipped.</p>` : ""}
+    <p class="text-xs text-amber-200/90">Sensitivity: this file contains private health notes. Importing adds them to this device's records — keep the file private and delete it when you're done.</p>
     <p class="text-xs text-slate-400"><strong>Merge</strong> keeps what is already on this device and adds the file's records.
       <strong>Replace</strong> deletes everything on this device first — use only when restoring a backup.</p>
     <div class="flex gap-2 pt-1">
@@ -946,50 +1224,139 @@ function showImportPreview(v, data) {
 
 async function runImport(mode) {
   const box = $("#import-preview");
-  const data = JSON.parse(box.dataset.payload || "null");
+  let data = null;
+  try { data = JSON.parse(box.dataset.payload || "null"); } catch { data = null; }
   if (!data) return;
+  // Revalidate at apply time — the preview could be stale, and the payload
+  // lives in the DOM where it could have been tampered with.
   const v = validateExport(data);
-  if (mode === "replace") {
-    if (!confirm("Replace EVERYTHING on this device with the export file? Current records will be permanently deleted.")) return;
-    await Store.wipeAllData();
+  if (!v.ok) { showImportPreview(v); return; }
+  if (mode === "replace" && !confirm(
+    "Replace EVERYTHING on this device with the export file? Current records will be permanently deleted.")) {
+    return;
   }
-  let skipped = 0, added = 0;
-  const existing = new Set();
+  const clearStores = mode === "replace"
+    ? ["profiles", "usage", "symptoms", "observations", "reminders",
+       "goals", "meta", "productUnits"] : [];
+  const writes = [];
   if (mode === "merge") {
-    for (const store of ["profiles", "usage", "symptoms", "observations", "reminders"]) {
+    // dedupe against what is already on the device (records with an id
+    // that exists here are skipped, not overwritten)
+    const existing = new Set();
+    for (const store of ["profiles", "usage", "symptoms", "observations",
+                         "reminders", "productUnits"]) {
       for (const r of await Store.getAll(store)) existing.add(store + ":" + r.id);
     }
-  }
-  for (const block of data.profiles) {
-    if (mode === "merge" && existing.has("profiles:" + block.profile.id)) {
-      // profile exists; still import its records (dedup by id below)
-    } else {
-      await Store.put("profiles", block.profile);
+    const skip = (store, id) => existing.has(store + ":" + id);
+    for (const block of data.profiles) {
+      const pid = block.profile.id;
+      writes.push({ store: "profiles", records:
+        skip("profiles", pid) ? [] : [{ ...block.profile }] });
+      writes.push({ store: "productUnits", records:
+        (data.schema === 2 ? (block.productUnits || []) : [])
+        .filter(u => u && u.id && IMPORT_ID_RE.test(String(u.id)) &&
+               UNITS.includes(u.unit) && !skip("productUnits", u.id))
+        .map(u => ({ ...u, profileId: pid })) });
+      for (const [key, store, check] of [
+        ["usage", "usage", r => Number(r.amount) > 0 && UNITS.includes(r.unit)],
+        ["symptoms", "symptoms", r => r.severity >= 1 && r.severity <= 5],
+        ["observations", "observations", () => true],
+        ["reminders", "reminders",
+         r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+      ]) {
+        writes.push({ store, records: (block[key] || [])
+          .filter(r => r && r.id && IMPORT_ID_RE.test(String(r.id)) &&
+                 check(r) && !skip(store, r.id))
+          .map(r => ({ ...r, profileId: pid })) });
+      }
+      writes.push({ store: "goals", records: [{
+        id: pid, profileId: pid,
+        goalKeys: (Array.isArray(block.goals)
+          ? block.goals.filter(k => GOALS[k]) : []) }] });
     }
-    await Store.put("goals", { id: block.profile.id, goalKeys: block.goals || [] });
-    for (const [key, store, check] of [
-      ["usage", "usage", r => Number(r.amount) > 0 && UNITS.includes(r.unit)],
-      ["symptoms", "symptoms", r => r.severity >= 1 && r.severity <= 5],
-      ["observations", "observations", () => true],
-      ["reminders", "reminders", r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
-    ]) {
-      for (const r of block[key] || []) {
-        const keyId = store + ":" + r.id;
-        if (mode === "merge" && existing.has(keyId)) continue;
-        if (!check(r)) { skipped++; continue; }
-        await Store.put(store, { ...r, profileId: block.profile.id });
-        added++;
+  } else {
+    // replace: write the export's own meta keys after wipe
+    for (const block of data.profiles) {
+      const pid = block.profile.id;
+      writes.push({ store: "profiles", records: [{ ...block.profile }] });
+      writes.push({ store: "productUnits", records:
+        (data.schema === 2 ? (block.productUnits || []) : [])
+        .filter(u => u && u.id && IMPORT_ID_RE.test(String(u.id)) &&
+               UNITS.includes(u.unit))
+        .map(u => ({ ...u, profileId: pid })) });
+      for (const [key, store, check] of [
+        ["usage", "usage", r => Number(r.amount) > 0 && UNITS.includes(r.unit)],
+        ["symptoms", "symptoms", r => r.severity >= 1 && r.severity <= 5],
+        ["observations", "observations", () => true],
+        ["reminders", "reminders",
+         r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+      ]) {
+        writes.push({ store, records: (block[key] || [])
+          .filter(r => r && r.id && IMPORT_ID_RE.test(String(r.id)) && check(r))
+          .map(r => ({ ...r, profileId: pid })) });
+      }
+      writes.push({ store: "goals", records: [{
+        id: pid, profileId: pid,
+        goalKeys: (Array.isArray(block.goals)
+          ? block.goals.filter(k => GOALS[k]) : []) }] });
+    }
+  }
+  try {
+    await Store.importAtomic(writes, clearStores);
+  } catch (e) {
+    showImportPreview({ ok: false, errors:
+      [e && e.message ? e.message : "Import failed — nothing was changed."],
+      counts: null });
+    return;
+  }
+  // Schema-1 imports have no productUnits in the file: rebuild remembered
+  // units from each product's most recent usage record that was imported.
+  if (data.schema === 1) {
+    for (const block of data.profiles) {
+      const perProduct = {};
+      for (const u of (block.usage || [])) {
+        if (typeof u.peptideName !== "string" || !UNITS.includes(u.unit)) continue;
+        const k = u.peptideName.toLowerCase();
+        if (!perProduct[k] || new Date(u.takenAt) > new Date(perProduct[k].takenAt)) {
+          perProduct[k] = u;
+        }
+      }
+      for (const [k, u] of Object.entries(perProduct)) {
+        if (IMPORT_ID_RE.test(block.profile.id)) {
+          await Store.rememberUnit(block.profile.id, u.peptideName, u.unit);
+        }
       }
     }
   }
   box.classList.add("hidden");
+  box.dataset.payload = "";
   $("#import-file").value = "";
-  toast(`✓ Import complete — ${added} record(s) added${skipped ? ", " + skipped + " skipped as invalid" : ""}`);
+  const added = writes.reduce((n, w) => n + w.records.length, 0);
+  toast(`✓ Import complete — ${added} record(s) added (validated before anything was written)`);
   const first = (await Store.profiles())[0];
   await switchProfile(first ? first.id : null);
   if (!profile) $("#first-run").classList.remove("hidden");
   await loadAll();
 }
+
+// Delegated actions for record buttons (Log again / Correct / reminders).
+// Record ids are NEVER interpolated into inline onclick attributes — they
+// can come from an imported file, so they are read via dataset only.
+const DELEGATED_ACTIONS = {
+  "log-again": (id) => logAgain(id),
+  "correct-dose": (id) => openLogSheet(id),
+  "correct-obs": (id) => openObservationSheet(id),
+  "toggle-reminder": (id) => {
+    const r = lastReminders.find(x => x.id === id);
+    if (r) toggleReminder(id, r.enabled === false);
+  },
+  "delete-reminder": (id) => deleteReminder(id),
+};
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-act]");
+  if (!btn || !DELEGATED_ACTIONS[btn.dataset.act]) return;
+  DELEGATED_ACTIONS[btn.dataset.act](btn.dataset.id);
+});
 
 // ---------------- product picker ----------------
 function attachPicker(inputId, listId, onPick) {
