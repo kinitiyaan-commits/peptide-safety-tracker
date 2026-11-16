@@ -278,3 +278,31 @@ browser-verified (details in `docs/PWA.md`):
   `controllerchange`; first-install claim does not reload.
 - ✅ Policy drafts: sessionStorage disclosure + "backup includes every
   profile on this device" in privacy.html, terms.html, and the in-app note.
+
+## Release-candidate pass (2026-11-15, from `71d09cf`)
+
+- ✅ Training context added to the observation form (owner-approved
+  exception to the feature freeze): optional, collapsed by default,
+  `tc_*` keys inside the existing `goalData`; history labels all `tc_*`
+  fields; summaries label them but exclude the private note unless the
+  user opts in; backup/restore round-trip verified; neutral wording only.
+- ✅ Draft-loss fix: `saveDraftSilently()` returns success/failure;
+  `controllerchange` in a non-initiating tab never reloads on storage
+  failure — it warns ("WILL BE LOST" / "keeps working") and keeps the
+  form open on Cancel. Two-tab test with forced storage failure passed.
+- ✅ Found + fixed during verification: observation drafts did not restore
+  training-context fields (selector covered only `#observation-fields`);
+  now `#observation-sheet .gf`. Re-verified end-to-end.
+- ✅ Owner-details structure approved (handle not personal name, GitHub
+  Issues feedback with public-posting warning, private security email);
+  literal handle + email still `[OWNER TO SUPPLY]` — fill before deploy.
+- ✅ Policies finalized: intended-functionality wording replaces the
+  "not a medical device" assertion; liability clause no longer implies
+  terms eliminate liability; "Open legal questions" section added;
+  privacy short version and full page aligned (IndexedDB, sessionStorage,
+  GitHub Pages, external searches, all-profile backups, downloaded files).
+- ✅ Suite: 200 passed (18 new executable checks this pass). SW cache v7.
+- 🔒 Still owner-side: fill the two `[OWNER TO SUPPLY]` values; approve
+  the final privacy/terms text; real-phone checks (install, offline
+  reopen, update with unfinished entry, record preservation); merge and
+  deploy approvals. Branch remains unmerged.

@@ -130,11 +130,24 @@ async function init() {
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (reloadedFlag) return;
-      reloadedFlag = true;
-      if (hadController) {
-        saveDraftSilently();
+      if (!hadController) return;   // first install — nothing to reload for
+      // Save this tab's draft FIRST. If the save fails (storage error),
+      // reloading would destroy the unfinished entry without warning —
+      // so do not reload automatically; ask, keeping the form visible.
+      if (saveDraftSilently()) {
+        reloadedFlag = true;
+        location.reload();
+      } else if (confirm(
+          "An app update finished installing in another tab. You have an " +
+          "unfinished entry open, but this browser could not preserve it " +
+          "across a reload.\n\n" +
+          "\"OK\" reloads now and the unfinished entry WILL BE LOST. " +
+          "\"Cancel\" keeps working — the update will apply the next time " +
+          "you reload.")) {
+        reloadedFlag = true;
         location.reload();
       }
+      // on Cancel: no reload, form stays open, nothing was discarded.
     });
   }
   await loadAll();
@@ -226,9 +239,13 @@ function captureDraftForUpdate() {
 // Silent variant used by the controllerchange handler in OTHER tabs: the
 // update was already accepted elsewhere, so there is nothing to ask —
 // but a draft must not be destroyed by a reload this tab never chose.
+// Returns true when there is nothing to lose OR the draft was saved;
+// false when a draft exists but could NOT be saved — the caller must not
+// reload without warning, or the entry is lost silently.
 function saveDraftSilently() {
   const d = collectDraft();
-  if (d && draftHasContent(d)) storeDraft(d);
+  if (!d || !draftHasContent(d)) return true;   // nothing to lose
+  return storeDraft(d);
 }
 
 function applyUpdate() {
@@ -312,8 +329,10 @@ async function restoreDraft() {
         $("#o-notes").value = d.data.notes || "";
         if (d.data.goals) {
           for (const [k, v] of Object.entries(d.data.goals)) {
+            // covers BOTH the tracking-goal fields (#observation-fields)
+            // and the training-context fields (#training-fields)
             const el = document.querySelector(
-              `#observation-fields .gf[data-gkey="${CSS.escape(k)}"]`);
+              `#observation-sheet .gf[data-gkey="${CSS.escape(k)}"]`);
             if (el) el.value = v;
           }
         }
@@ -500,6 +519,8 @@ function openObservationSheet(entryId) {
   const form = $("#observation-sheet form");
   form.dataset.idem = crypto.randomUUID();
   form.reset();                                   // A.1: always open blank
+  const tc = $("#training-context");
+  if (tc) tc.open = false;                        // training context: collapsed by default, every open
   const box = $("#observation-fields");
   box.innerHTML = goalsKeys.length
     ? goalsKeys.flatMap(k => GOALS[k] && GOALS[k].fields ? GOALS[k].fields : []).map(f =>
@@ -510,7 +531,7 @@ function openObservationSheet(entryId) {
     if (e) {
       $("#o-when").value = toLocalInput(e.takenAt);
       $("#o-notes").value = e.notes || "";
-      box.querySelectorAll(".gf").forEach(el => {
+      document.querySelectorAll("#observation-sheet .gf").forEach(el => {
         const v = e.goalData && e.goalData[el.dataset.gkey];
         if (v !== undefined) el.value = v;
       });
@@ -532,9 +553,20 @@ function goalFieldInput(f) {
   return `<input type="text" maxlength="200" class="inp gf" data-gkey="${esc(f.key)}" placeholder="optional">`;
 }
 
+// Training-context labels (observation sheet's optional section). Keys are
+// stored in the observation's existing goalData under tc_* — no new stores,
+// no schema change; backup/restore and correction history come free.
+const TC_LABELS = {
+  tc_session_type: "Session type",
+  tc_muscles: "Muscles trained",
+  tc_effort: "Session effort",
+  tc_soreness: "Soreness",
+  tc_note: "Training note",
+};
+
 function collectGoalData() {
   const data = {};
-  document.querySelectorAll("#observation-fields .gf").forEach(el => {
+  document.querySelectorAll("#observation-fields .gf, #training-fields .gf").forEach(el => {
     if (el.value === "" || el.value == null) return;
     data[el.dataset.gkey] = el.value;
   });
@@ -784,7 +816,7 @@ function renderHistory() {
       <div class="flex justify-between gap-3">
         <div><span class="text-xs font-bold text-sky-400 uppercase">Observation</span>
           ${o.notes ? `<p class="text-sm">${esc(o.notes)}</p>` : ""}
-          ${o.goalData ? `<p class="text-xs text-slate-300">${esc(Object.entries(o.goalData).map(([k, v]) => k + " " + v).join(", "))}</p>` : ""}
+          ${o.goalData ? `<p class="text-xs text-slate-300">${esc(Object.entries(o.goalData).map(([k, v]) => (TC_LABELS[k] || k) + " " + v).join(", "))}</p>` : ""}
           ${correctionHtml(o.corrections, OBS_PREV)}
         </div>
         <div class="text-right shrink-0"><p class="text-xs text-slate-500">${fmtWhen(o.takenAt)}</p>
@@ -904,8 +936,13 @@ function summaryHtmlText(d) {
   const symptomLines = d.symptoms.map(s =>
     `<li>${fmtWhen(s.loggedAt)} — <strong>${esc2(s.peptideName)}</strong>, severity ${s.severity}/5: ${esc2(s.description)}</li>`);
   const obsLines = d.observations.map(o => {
+    // goal fields shown as raw keys (established behavior); training-context
+    // fields use human labels, and the private training note is excluded
+    // unless the user opted into notes for this summary.
     const fields = o.goalData
-      ? Object.entries(o.goalData).map(([k, v]) => `${esc2(k)}: ${esc2(v)}`).join("; ")
+      ? Object.entries(o.goalData)
+          .filter(([k]) => k !== "tc_note" || d.includeNotes)
+          .map(([k, v]) => `${esc2(TC_LABELS[k] || k)}: ${esc2(v)}`).join("; ")
       : "";
     return `<li>${fmtWhen(o.takenAt)}${fields ? " — " + fields : ""}` +
       (d.includeNotes && o.notes ? ` — ${esc2(o.notes)}` : "") + `</li>`;

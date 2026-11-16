@@ -261,6 +261,72 @@ Executable tests for all of the above were added to `tests/test_pwa.py`
 `TestDraftContextPreserved`, `TestRollbackClaimAccuracy`,
 `TestPolicyDraftAccuracy`). Full suite: 182 passed.
 
+## Release-candidate pass (2026-11-15, from `71d09cf`)
+
+Feature-freeze pass: one small requested feature, then the release items.
+SW cache at **v7** (three bumps during the pass as code changed).
+
+**Training context (optional observation section).** A collapsed
+`<details id="training-context">` in the observation sheet: session type,
+muscles trained, perceived session effort (1–5), soreness (1–5), and a
+private note. Wording is neutral throughout — "Your own training notes for
+your records… The app draws no connection between training and any
+product." No dose, product, or outcome claims anywhere. Implementation:
+
+- Stored in the observation's existing `goalData` under `tc_` keys
+  (`tc_session_type`, `tc_muscles`, `tc_effort`, `tc_soreness`,
+  `tc_note`) — no new stores, no schema change, so correction history,
+  backup/restore, and per-profile isolation come free via the
+  `goalData` passthrough.
+- `collectGoalData()` now reads `#observation-fields .gf, #training-fields
+  .gf`; the details element is collapsed on every `openObservationSheet()`
+  open (values still prefill in correction mode while collapsed).
+- History renders `tc_*` with human labels (`TC_LABELS`), including the
+  private note — history is the user's own view.
+- Appointment summaries map the same labels but **exclude `tc_note`
+  unless the user opts into notes** for that summary.
+- Verified in the browser: save → history labels, correction prefill
+  (collapsed), summary exclusion/opt-in, export→import round-trip
+  preserving all `tc_*` values (schema 2).
+
+**Draft-loss fix (`controllerchange`).** `saveDraftSilently()` now returns
+the `storeDraft()` result. The `controllerchange` handler in a
+non-initiating tab no longer reloads unconditionally: on storage-write
+failure it shows an explicit choice — "OK" reloads and the unfinished
+entry WILL BE LOST; "Cancel" keeps working and the update applies on the
+next reload — keeping the form visible and discarding nothing without
+consent. Verified with two tabs: tab B (non-initiating) had an unfinished
+form **and forced sessionStorage-write failure**; tab A accepted the
+update; tab B showed the warning, Cancel left the form open with its
+content intact and no reload. Single-tab `captureDraftForUpdate()` confirm
+behavior unchanged.
+
+**Bug found and fixed during verification:** `restoreDraft()` only queried
+`#observation-fields .gf`, so an observation draft's **training-context
+fields were not restored** after an update reload (dose/goal fields were).
+Now queries `#observation-sheet .gf`, covering both containers. Re-verified
+end-to-end: all five `tc_*` values restored after a real update cycle.
+
+**Owner details (structure approved in one message).** Operator published
+under a **public handle, not a personal name**; feedback goes to **GitHub
+Issues on this repository** (public — warning not to post health data,
+present in privacy.html and the in-app Feedback section); a separate
+**private security/privacy email** for security/privacy reports. The two
+literal values (handle, email) remain marked `[OWNER TO SUPPLY]` in
+privacy.html/terms.html and must be filled before deployment.
+
+**Policy finalization.** terms.html no longer asserts "not a medical
+device" as a legal conclusion — it describes intended functionality (what
+the app does/does not do). Liability wording no longer implies the terms
+eliminate liability ("nothing in these terms limits or excludes any
+liability that cannot be limited or excluded under applicable law"), with
+final wording flagged as an owner decision. An "Open legal questions"
+section surfaces unresolved items (applicable jurisdiction/rules,
+device-regulation question, liability wording, license). privacy.html
+covers: IndexedDB records, per-tab sessionStorage drafts, GitHub Pages
+hosting logs, external product-name searches, all-profile backups, and
+that downloaded/shared files leave the app's control. Suite: 200 passed.
+
 ## Regenerating static data
 
 After editing the catalog or goals in the Python seed:

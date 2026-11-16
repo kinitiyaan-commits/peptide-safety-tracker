@@ -81,7 +81,7 @@ class TestServiceWorker:
             f = (PWA / name)
             assert f.is_file(), f"missing pwa/{name}"
             text = f.read_text()
-            assert "OWNER TO CONFIRM" in text      # placeholders visible
+            assert "OWNER TO SUPPLY" in text       # pending literal values visible
             assert "not medical advice" in text or "Not medical advice" in text or "medical" in text
         sw = (PWA / "sw.js").read_text()
         assert '"./privacy.html"' in sw and '"./terms.html"' in sw
@@ -206,8 +206,12 @@ class TestAppRequirements:
         assert "awaiting-verification" in app
 
     def test_no_personal_names_or_paths(self):
+        approved_repo = "github.com/kinitiyaan-commits/peptide-safety-tracker"
         for name in ("index.html", "app.js", "store.js", "data.js", "sw.js"):
             text = (PWA / name).read_text().lower()
+            # the approved feedback route (repo URL) is the ONLY allowed
+            # occurrence of the account name — strip it before checking
+            text = text.replace(approved_repo, "approved-repo-url")
             for marker in ("tiyaan", "jordan", "kinitiyaan", "/home/", "c:\\\\"):
                 assert marker not in text
 
@@ -287,10 +291,12 @@ class TestDataPreservation:
         assert "update-banner" in app
         assert "updatefound" in app
         # location.reload() exists ONLY inside the controlled update flow:
-        # inside applyUpdate and the one-time controllerchange reload.
-        assert app.count("location.reload()") == 2
+        # applyUpdate's stale-banner grace reload, the controllerchange
+        # success reload, and the controllerchange reload after the user
+        # explicitly accepts the storage-failure loss warning.
+        assert app.count("location.reload()") == 3
         update_flow = app.split("if (\"serviceWorker\" in navigator)", 1)[1]
-        assert update_flow.count("location.reload()") == 2
+        assert update_flow.count("location.reload()") == 3
 
     def test_import_leaves_data_intact_on_failure(self):
         app = (PWA / "app.js").read_text()
@@ -328,7 +334,8 @@ class TestInstallAccessibilityFeedback:
         warning = settings.split("Privacy warning", 1)[1].split("</p>", 1)[0]
         assert "include medical records" in warning
         assert "never attaches data to feedback automatically" in settings
-        assert "pending the owner's decision" in settings
+        assert "github.com/kinitiyaan-commits/peptide-safety-tracker/issues" in settings
+        assert "pending the owner's decision" not in settings   # route approved
 
     def test_no_auto_attachment_anywhere(self):
         app = (PWA / "app.js").read_text()
@@ -515,9 +522,10 @@ class TestAccuratePrivacyWording:
         assert "new-profile-age" not in html
         assert "Age (optional)" not in html
 
-    def test_feedback_destination_pending_owner(self):
+    def test_feedback_destination_approved(self):
         html = self._html()
-        assert "pending the owner's decision" in html
+        assert "github.com/kinitiyaan-commits/peptide-safety-tracker/issues" in html
+        assert "pending the owner's decision" not in html
         assert "public" in html.split("Privacy warning", 1)[1].split("</p>", 1)[0]
 
     def test_drugsfda_link_in_verification(self):
@@ -619,3 +627,126 @@ class TestPolicyDraftAccuracy:
         html = (PWA / "index.html").read_text()
         assert "sessionStorage" in html
         assert "every profile on this device" in html
+
+
+# ---------------- training context + draft-loss fix (release pass) ----------------
+
+class TestTrainingContextWiring:
+    def test_markup_has_all_fields_collapsed_private_note(self):
+        html = (PWA / "index.html").read_text()
+        assert 'id="training-context"' in html
+        assert "<details" in html.split('id="training-context"')[0][-200:]
+        for key in ("tc_session_type", "tc_muscles", "tc_effort",
+                    "tc_soreness", "tc_note"):
+            assert f'data-gkey="{key}"' in html
+        assert "private" in html.split('data-gkey="tc_note"')[0].split("Training context")[-1].lower() or \
+               "Stays out of appointment summaries" in html
+
+    def test_collect_goal_data_captures_training_fields(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function collectGoalData", 1)[1].split("return Object.keys", 1)[0]
+        assert "#observation-fields .gf" in body
+        assert "#training-fields .gf" in body
+
+    def test_sheet_collapses_training_context_on_open(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function openObservationSheet", 1)[1].split("function goalFieldInput", 1)[0]
+        assert '"#training-context"' in body
+        assert ".open = false" in body
+
+    def test_summary_labels_and_private_note_exclusion(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("const obsLines = d.observations.map", 1)[1].split("});", 1)[0]
+        assert 'k !== "tc_note" || d.includeNotes' in body
+        assert "TC_LABELS[k] || k" in body
+
+    def test_history_uses_labels(self):
+        app = (PWA / "app.js").read_text()
+        assert "TC_LABELS[k] || k" in app.split("<span class=\"text-xs font-bold text-sky-400 uppercase\">Observation</span>", 1)[1][:400]
+
+    def test_labels_are_neutral_no_claims(self):
+        app = (PWA / "app.js").read_text()
+        block = app.split("const TC_LABELS", 1)[1].split("};", 1)[0]
+        assert "tc_note" in block
+        for banned in ("treat", "cure", "improve", "boost", "enhance"):
+            assert banned not in block.lower()
+
+    def test_draft_picks_up_training_fields_automatically(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split('draft.sheet = "observation"', 1)[1].split("collectDraft", 1)[0]
+        assert "collectGoalData()" in body
+
+    def test_draft_restore_covers_training_fields(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function restoreDraft", 1)[1].split("};", 1)[0]
+        # restore must query the whole sheet, not only #observation-fields —
+        # training-context fields live in #training-fields
+        assert '#observation-sheet .gf[data-gkey=' in body
+        seg = body.split('d.sheet === "observation"', 1)[1]
+        assert "observation-fields .gf" not in seg
+
+
+class TestDraftLossFixControllerchange:
+    def test_save_draft_silently_returns_result(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function saveDraftSilently", 1)[1].split("\nfunction ", 1)[0]
+        assert "return storeDraft(d);" in body
+        assert "return true;" in body          # nothing-to-lose path
+
+    def test_no_auto_reload_on_storage_failure(self):
+        app = (PWA / "app.js").read_text()
+        seg = app.split('addEventListener("controllerchange"', 1)[1].split("});", 1)[0]
+        # reload only inside the success branch or after explicit confirm
+        assert "if (saveDraftSilently())" in seg
+        assert seg.index("if (saveDraftSilently())") < seg.index("confirm(")
+        assert "WILL BE LOST" in seg           # explicit loss warning
+        assert "keeps working" in seg          # explicit recovery choice
+
+    def test_failure_confirm_offers_update_next_reload(self):
+        app = (PWA / "app.js").read_text()
+        seg = app.split('addEventListener("controllerchange"', 1)[1].split("});", 1)[0]
+        assert "the update will apply the next time" in seg
+
+    def test_single_tab_confirm_behavior_unchanged(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function captureDraftForUpdate", 1)[1].split("\nfunction ", 1)[0]
+        assert "return confirm(" in body       # still a confirm, not forced
+
+
+# ---------------- policy finalization (approved structure, 2026-11-15) ----------------
+
+class TestPolicyFinalization:
+    def test_no_medical_device_legal_assertion(self):
+        text = (PWA / "terms.html").read_text()
+        assert "not a medical device" not in text.lower()
+        assert "does not diagnose" in text and "medical advice" in text
+
+    def test_liability_does_not_imply_terms_eliminate_it(self):
+        text = (PWA / "terms.html").read_text()
+        assert "cannot be limited or excluded" in text
+        assert "To the maximum extent permitted by law, the operator is not liable" not in text
+
+    def test_open_legal_questions_surfaced(self):
+        text = (PWA / "terms.html").read_text()
+        assert "Open legal questions" in text
+        assert "not legal clearance" in text
+
+    def test_approved_feedback_route(self):
+        for f in ("privacy.html", "index.html"):
+            text = (PWA / f).read_text()
+            assert "github.com/kinitiyaan-commits/peptide-safety-tracker/issues" in text
+        privacy = (PWA / "privacy.html").read_text()
+        assert "Issues are public" in privacy
+
+    def test_pending_literal_values_clearly_marked(self):
+        privacy = (PWA / "privacy.html").read_text()
+        terms = (PWA / "terms.html").read_text()
+        assert "[OWNER TO SUPPLY" in privacy   # handle + security email pending
+        assert "[OWNER TO SUPPLY" in terms
+        # no stale generic placeholder left
+        for f in ("privacy.html", "terms.html"):
+            assert "[OWNER TO CONFIRM]" not in (PWA / f).read_text()
+
+    def test_exports_downloaded_shared_files_disclosure(self):
+        text = (PWA / "privacy.html").read_text()
+        assert "no longer controls it" in text
