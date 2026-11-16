@@ -23,7 +23,7 @@
     .fab{width:3.75rem;height:3.75rem;border-radius:9999px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:1.75rem;box-shadow:0 8px 24px rgba(5,150,105,.4)}
     .err{color:#f87171;font-size:.8rem;min-height:1.1rem}
     .picker-wrap{position:relative}
-    .picker-list{position:absolute;left:0;right:0;bottom:100%;margin-bottom:.3rem;z-index:70;background:#0f172a;border:1px solid #334155;border-radius:.6rem;max-height:15rem;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+    .picker-list{position:absolute;left:0;right:0;top:100%;margin-top:.3rem;z-index:70;background:#0f172a;border:1px solid #334155;border-radius:.6rem;max-height:15rem;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.5)}
     .hidden{display:none!important}
     main{padding-bottom:7rem}
   </style>
@@ -50,8 +50,8 @@
     <h2 class="text-xl font-bold">Create your first profile</h2>
     <p class="text-sm text-slate-400">All data stays in this browser on this device — nothing is sent to any server. Profiles organize records; they are not passwords, and anyone who can use this device can open any profile.</p>
     <form onsubmit="createProfile(event)" class="space-y-2">
-      <input id="new-profile-name" class="inp" placeholder="Profile name" maxlength="40">
-      <input id="new-profile-age" type="number" min="1" max="120" class="inp" placeholder="Age (optional)">
+      <input id="new-profile-name" name="pname" class="inp" placeholder="Profile name" maxlength="40">
+      <input id="new-profile-age" name="page" type="number" min="1" max="120" class="inp" placeholder="Age (optional)">
       <button class="btn w-full">Create profile</button>
     </form>
   </div>
@@ -112,7 +112,7 @@
         <ul class="text-sm text-slate-300 space-y-2 list-disc pl-5 pt-2 leading-relaxed">
           <li><strong>"Approved products exist"</strong> is an ingredient-level statement: FDA-approved prescription products exist for this ingredient, but approval applies only to those <em>specific products</em>. Other versions — compounded and "research" versions of the same molecule — are <strong>not</strong> approved.</li>
           <li><strong>"No FDA-approved product"</strong> means no FDA-approved human use exists for that ingredient at all.</li>
-          <li>Approval is verified per <strong>exact product</strong> on DailyMed — never per ingredient.</li>
+          <li>Approval is checked per <strong>exact product</strong> in <a class="text-emerald-400 underline" href="https://www.accessdata.fda.gov/scripts/cder/daf/" target="_blank" rel="noopener">Drugs@FDA</a> — never per ingredient. DailyMed is for labeling; it also lists products that are not FDA-approved.</li>
           <li>"Source verified" means the app's developer checked the cited official page on the review date — <strong>not qualified clinical review</strong>, never implying safety or endorsement.</li>
         </ul>
       </details>
@@ -134,7 +134,7 @@
           <button onclick="deleteProfile()" class="btn2 !py-2 whitespace-nowrap text-xs">Delete profile</button>
         </div>
         <form onsubmit="createProfile(event)" class="flex gap-2">
-          <input id="new-profile-name" class="inp" placeholder="New profile name" maxlength="40">
+          <input id="add-profile-name" name="pname" class="inp" placeholder="New profile name" maxlength="40">
           <button class="btn !py-2 whitespace-nowrap text-xs">Add</button>
         </form>
         <p class="text-xs text-slate-500">Profiles are not authentication — anyone who can use this device can open any profile.</p>

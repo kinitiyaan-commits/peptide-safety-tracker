@@ -26,7 +26,8 @@ approves a change. Nonconflicting guidance elsewhere still applies.
 3a. **Approval wording is ingredient-level, never product-implication.**
    The catalog must say "Approved products exist" (ingredient-level), never
    plain "FDA-approved" next to an ingredient name. Approval applies only to
-   specific products, verified per exact product on DailyMed. FDA
+   specific products. Check approval per exact product in Drugs@FDA;
+   use DailyMed for labeling only (it also lists unapproved products). FDA
    distinguishes approved products from unapproved versions of the same
    molecule (e.g., unapproved GLP-1 drugs — see docs/PEPTIDE_RESOURCES.md).
 3b. **Catalog review metadata.** Every catalog entry carries `review_status`

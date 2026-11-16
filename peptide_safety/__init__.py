@@ -12,7 +12,7 @@ __version__ = "0.1.0"
 ALLOWED_UNITS = ("mcg", "mg", "IU", "units", "mL")
 
 REGULATORY_STATUSES = {
-    "fda-approved": "FDA-approved product (verify exact product on DailyMed)",
+    "fda-approved": "FDA-approved product (check exact product in Drugs@FDA)",
     "not-fda-approved": "Not FDA-approved for human use (see FDA compounding page)",
     "compounding-flagged": "Named in FDA compounding risk context (verify at fda.gov)",
     "unknown": "Regulatory status not established here — verify manually",

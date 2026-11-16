@@ -20,7 +20,10 @@ Two deliverables live in this repository:
 - Show **regulatory status only** for catalog ingredients, each with a cited
   source (FDA / DailyMed / MedlinePlus). Ingredient-level statements such as
   "Approved products exist" never imply that any specific product you have
-  is approved; approval is verified per exact product on DailyMed.
+  is approved; check approval per exact product in
+  [Drugs@FDA](https://www.accessdata.fda.gov/scripts/cder/daf/) and use
+  DailyMed for labeling only, since DailyMed also lists products that are not
+  FDA-approved.
 - Link out to official sources (DailyMed, openFDA, FDA compounding pages)
   for verification. The app never interprets results or scores brands.
 - Export the current profile's data as JSON/CSV. Nothing leaves the device

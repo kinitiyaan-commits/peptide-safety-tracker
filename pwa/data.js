@@ -6,7 +6,7 @@ const STATIC_DATA = {
       "name": "Semaglutide",
       "category": "GLP-1 receptor agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Ozempic, Wegovy) \u2014 approval applies to those specific products only. FDA has also raised concerns about unapproved GLP-1 versions; verify any exact product on DailyMed before treating it as approved.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Ozempic, Wegovy) \u2014 approval applies to those specific products only. FDA has also raised concerns about unapproved GLP-1 versions; check the exact product in Drugs@FDA before treating it as approved (DailyMed has labeling).",
       "source_url": "https://www.fda.gov/drugs/drug-alerts-and-statements/fdas-concerns-unapproved-glp-1-drugs-used-weight-loss",
       "review_status": "verified",
       "source_type": "fda"
@@ -15,7 +15,7 @@ const STATIC_DATA = {
       "name": "Tirzepatide",
       "category": "GIP/GLP-1 receptor agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Zepbound, Mounjaro) \u2014 approval applies to those specific products only. Compounded and unapproved versions are not FDA-approved; verify any exact product on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Zepbound, Mounjaro) \u2014 approval applies to those specific products only. Compounded and unapproved versions are not FDA-approved; check any exact product in Drugs@FDA.",
       "source_url": "https://www.fda.gov/drugs/drug-alerts-and-statements/fdas-concerns-unapproved-glp-1-drugs-used-weight-loss",
       "review_status": "verified",
       "source_type": "fda"
@@ -69,7 +69,7 @@ const STATIC_DATA = {
       "name": "Somatropin (HGH)",
       "category": "Growth hormone (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Genotropin, Norditropin, Skytrofa). MedlinePlus identifies somatropin as a human growth hormone analog used for specific growth-hormone-related and other medical conditions \u2014 it is not a general height or appearance enhancer. Height/growth context: approval covers those labeled indications in specific products only \u2014 use for 'height enhancement' outside them is not FDA-approved. This app takes no position on personal use; verify the exact product and its labeled indications on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Genotropin, Norditropin, Skytrofa). MedlinePlus identifies somatropin as a human growth hormone analog used for specific growth-hormone-related and other medical conditions \u2014 it is not a general height or appearance enhancer. Height/growth context: approval covers those labeled indications in specific products only \u2014 use for 'height enhancement' outside them is not FDA-approved. This app takes no position on personal use; check the exact product's approval in Drugs@FDA and its labeled indications on DailyMed.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a622022.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -78,7 +78,7 @@ const STATIC_DATA = {
       "name": "Tesamorelin",
       "category": "GHRH analog (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Egrifta). MedlinePlus: used for excess abdominal fat in adults with HIV-associated lipodystrophy; the reference specifically says it is not used for weight loss. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Egrifta). MedlinePlus: used for excess abdominal fat in adults with HIV-associated lipodystrophy; the reference specifically says it is not used for weight loss. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a611035.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -87,7 +87,7 @@ const STATIC_DATA = {
       "name": "Setmelanotide",
       "category": "MC4R agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Imcivree) with labeled use in specific rare genetic obesity conditions. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Imcivree) with labeled use in specific rare genetic obesity conditions. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=setmelanotide",
       "review_status": "verified",
       "source_type": "dailymed"
@@ -96,7 +96,7 @@ const STATIC_DATA = {
       "name": "Bremelanotide (PT-141)",
       "category": "Melanocortin agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Vyleesi) with a labeled indication for specific patients. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Vyleesi) with a labeled indication for specific patients. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query=bremelanotide",
       "review_status": "verified",
       "source_type": "dailymed"
@@ -105,7 +105,7 @@ const STATIC_DATA = {
       "name": "Liraglutide",
       "category": "GLP-1 receptor agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Victoza, Saxenda) \u2014 approval applies to those specific products only. MedlinePlus covers particular diabetes, cardiovascular-risk, and weight-management uses; exact product and patient context matter. FDA has raised concerns about unapproved GLP-1 versions; verify any exact product on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Victoza, Saxenda) \u2014 approval applies to those specific products only. MedlinePlus covers particular diabetes, cardiovascular-risk, and weight-management uses; exact product and patient context matter. FDA has raised concerns about unapproved GLP-1 versions; check any exact product in Drugs@FDA.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a611003.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -114,7 +114,7 @@ const STATIC_DATA = {
       "name": "Dulaglutide",
       "category": "GLP-1 receptor agonist (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Trulicity). MedlinePlus covers type 2 diabetes and cardiovascular-risk reduction in specified populations. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Trulicity). MedlinePlus covers type 2 diabetes and cardiovascular-risk reduction in specified populations. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a614047.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -123,7 +123,7 @@ const STATIC_DATA = {
       "name": "Teriparatide",
       "category": "PTH analog (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Forteo). MedlinePlus: an osteoporosis treatment \u2014 not a general height-growth entry. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Forteo). MedlinePlus: an osteoporosis treatment \u2014 not a general height-growth entry. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a603018.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -132,7 +132,7 @@ const STATIC_DATA = {
       "name": "Abaloparatide",
       "category": "PTHrP analog (ingredient)",
       "regulatory_status": "fda-approved",
-      "evidence_note": "Approved products exist for this ingredient (e.g., Tymlos). MedlinePlus: an osteoporosis treatment; bone-treatment information must not be extrapolated into claims about height or appearance. Approval applies to those specific products and indications only. Verify on DailyMed.",
+      "evidence_note": "Approved products exist for this ingredient (e.g., Tymlos). MedlinePlus: an osteoporosis treatment; bone-treatment information must not be extrapolated into claims about height or appearance. Approval applies to those specific products and indications only. Check approval in Drugs@FDA; labeling on DailyMed.",
       "source_url": "https://medlineplus.gov/druginfo/meds/a617038.html",
       "review_status": "verified",
       "source_type": "medlineplus"
@@ -412,7 +412,7 @@ const STATIC_DATA = {
   },
   "GOALS_EXPLANATION": "Your goals customize your journal, not medication recommendations. Recording a goal does not mean a product is effective or appropriate for it.",
   "STATUSES": {
-    "fda-approved": "FDA-approved product (verify exact product on DailyMed)",
+    "fda-approved": "FDA-approved product (check exact product in Drugs@FDA)",
     "not-fda-approved": "Not FDA-approved for human use (see FDA compounding page)",
     "compounding-flagged": "Named in FDA compounding risk context (verify at fda.gov)",
     "unknown": "Regulatory status not established here \u2014 verify manually"

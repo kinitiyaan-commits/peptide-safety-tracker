@@ -813,11 +813,13 @@ const APP_VERSION = "pwa 0.2.0-beta";
 
 async function createProfile(ev) {
   ev.preventDefault();
-  const name = $("#new-profile-name").value.trim();
+  const form = ev.target;
+  const nameEl = form.elements.pname, ageEl = form.elements.page;
+  const name = nameEl.value.trim();
   if (!name) { toast("Profile needs a name", true); return; }
-  const p = await Store.createProfile(name, $("#new-profile-age").value, "");
+  const p = await Store.createProfile(name, ageEl ? ageEl.value : "", "");
   await switchProfile(p.id);
-  $("#new-profile-name").value = ""; $("#new-profile-age").value = "";
+  nameEl.value = ""; if (ageEl) ageEl.value = "";
   $("#first-run").classList.add("hidden");
   toast(`✓ Profile "${name}" created`);
   await loadAll();
@@ -1008,6 +1010,8 @@ function attachPicker(inputId, listId, onPick) {
     dd.classList.add("hidden");
     if (onPick) onPick(name);
   };
+  // Keep focus in the input while tapping an option so blur can't hide the list first.
+  dd.addEventListener("mousedown", ev => ev.preventDefault());
   input.addEventListener("focus", render);
   input.addEventListener("input", render);
   input.addEventListener("blur", () => setTimeout(() => dd.classList.add("hidden"), 120));
