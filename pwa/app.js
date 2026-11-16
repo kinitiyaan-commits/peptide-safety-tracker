@@ -77,6 +77,12 @@ function toast(msg, isWarn = false) {
 
 // ---------------- boot ----------------
 async function init() {
+  // Registered BEFORE any storage access: if the very first database open
+  // is blocked by another tab, the user must see why instead of a silent
+  // half-initialized app.
+  Store.onBlocked = (err) =>
+    toast(err && err.message ? err.message :
+      "A data update is waiting — close this app in other tabs, then reload.", true);
   catalogIndex = {};
   for (const c of CATALOG) {
     catalogIndex[c.name.toLowerCase()] = c;
@@ -95,7 +101,11 @@ async function init() {
   if ("serviceWorker" in navigator) {
     // Controlled updates: the new worker stays "waiting" until the user
     // taps "Reload & update" — an unfinished form is never interrupted.
+    // The registration is retained: ACCEPT_UPDATE must target
+    // registration.waiting (the installed, not-yet-active worker), not
+    // the currently active one.
     navigator.serviceWorker.register("./sw.js").then(reg => {
+      _swReg = reg;
       // An update may already be waiting from an earlier session — detect it.
       if (reg.waiting && navigator.serviceWorker.controller) {
         $("#update-banner").classList.remove("hidden");
@@ -111,47 +121,65 @@ async function init() {
         });
       });
     }).catch(() => {});
-    // Reload exactly once, after the waiting worker has taken over.
+    // When the waiting worker takes control after an accepted update, EVERY
+    // tab holding this app gets this event. Each tab silently preserves its
+    // own open-form draft (sessionStorage is per-tab) before reloading, so
+    // an update clicked in tab A cannot destroy a draft typed in tab B.
+    // (First install also fires controllerchange — nothing to reload for,
+    // the page already loaded the latest assets.)
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloadedFlag) return;
       reloadedFlag = true;
-      location.reload();
+      if (hadController) {
+        saveDraftSilently();
+        location.reload();
+      }
     });
   }
   await loadAll();
   window.addEventListener("online", () => $("#offline-badge").classList.add("hidden"));
   window.addEventListener("offline", () => $("#offline-badge").classList.remove("hidden"));
   if (!navigator.onLine) $("#offline-badge").classList.remove("hidden");
-  restoreDraft();
-  // Surface a blocked DB upgrade (another tab holds an old connection).
-  Store.onBlocked = (err) =>
-    toast(err && err.message ? err.message :
-      "A data update is waiting — close this app in other tabs, then reload.", true);
+  restoreDraft().catch(err => {
+    console.error(err);
+    toast("A saved draft could not be restored — reload this page once more to try again.", true);
+  });
 }
 
 // ---- unsaved-form draft preservation for updates ----
 // Before reloading for an update, capture anything typed into an open
 // sheet (log / symptom / observation forms, appointment summary) so the
-// user can cancel the update or keep their draft.
+// user can cancel the update or keep their draft. The draft carries the
+// owning profile id and the record id being corrected, so restoring
+// returns to the same context (a correction stays a correction).
 function collectDraft() {
   const draft = {};
   const grab = (id) => { const el = $(id); return el ? el.value : ""; };
   if (!$("#log-sheet").classList.contains("hidden")) {
     draft.sheet = "log";
+    draft.editingId = editingUsageId || null;   // null = new entry
     draft.data = { name: grab("#u-name"), amount: grab("#u-amount"),
       unit: grab("#u-unit"), when: grab("#u-when"), notes: grab("#u-notes") };
     draft.title = $("#log-sheet-title").textContent;
   } else if (!$("#symptom-sheet").classList.contains("hidden")) {
     draft.sheet = "symptom";
+    draft.editingId = null;
     draft.data = { name: grab("#s-name"), desc: grab("#s-desc"),
       severity: grab("#s-severity") };
   } else if (!$("#observation-sheet").classList.contains("hidden")) {
     draft.sheet = "observation";
+    draft.editingId = editingObservationId || null;   // null = new entry
     draft.data = { when: grab("#o-when"), notes: grab("#o-notes"),
       goals: collectGoalData() };
   } else if (!$("#summary-sheet").classList.contains("hidden")) {
     draft.sheet = "summary";
+    draft.editingId = null;
     draft.data = { from: grab("#sum-from"), to: grab("#sum-to"),
       includeNotes: $("#sum-notes").checked, questions: grab("#sum-questions") };
+  }
+  if (draft.sheet) {
+    draft.profileId = profile ? profile.id : null;
   }
   // dynamic observation goal fields (.gf inputs) are inside the
   // observation sheet and captured via collectGoalData() above.
@@ -165,80 +193,148 @@ function draftHasContent(d) {
     typeof x === "string" ? x.trim() !== "" : !!x);
 }
 
+// Try to persist the current open-form draft. Returns true when there is
+// nothing to lose OR the draft was saved successfully; false when there
+// is a draft but it could NOT be saved (storage failure) — callers must
+// then warn the user that reloading loses it.
+function storeDraft(d) {
+  try {
+    sessionStorage.setItem("pwa-draft", JSON.stringify(d));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function captureDraftForUpdate() {
   const d = collectDraft();
   if (!d || !draftHasContent(d)) return true;   // nothing to lose
-  try { sessionStorage.setItem("pwa-draft", JSON.stringify(d)); } catch (e) {}
+  const saved = storeDraft(d);
+  if (!saved) {
+    return confirm(
+      "An update is ready. You have an unfinished entry open, but this " +
+      "browser could not preserve it across a reload.\n\n" +
+      "\"OK\" reloads now and the unfinished entry WILL BE LOST. " +
+      "\"Cancel\" keeps working without updating now.");
+  }
   return confirm(
     "An update is ready. You have an unfinished entry open.\n\n" +
     "\"OK\" saves your draft and reloads (it will be restored after the " +
     "update). \"Cancel\" keeps working without updating now.");
 }
 
+// Silent variant used by the controllerchange handler in OTHER tabs: the
+// update was already accepted elsewhere, so there is nothing to ask —
+// but a draft must not be destroyed by a reload this tab never chose.
+function saveDraftSilently() {
+  const d = collectDraft();
+  if (d && draftHasContent(d)) storeDraft(d);
+}
+
 function applyUpdate() {
   // Only runs when the user taps "Reload & update" — never automatically.
   if (!captureDraftForUpdate()) { dismissUpdate(); return; }
-  const reg = navigator.serviceWorker && navigator.serviceWorker.controller;
   const banner = $("#update-banner");
   banner.querySelector("p").textContent = "Updating — reloading…";
-  if (reg) reg.postMessage({ type: "ACCEPT_UPDATE" });
+  // Message the WAITING worker — that is the installed update awaiting
+  // activation. Falling back to the active worker only covers the stale-
+  // banner edge case (no waiting worker exists anymore).
+  if (_swReg && _swReg.waiting) {
+    _swReg.waiting.postMessage({ type: "ACCEPT_UPDATE" });
+  } else if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: "ACCEPT_UPDATE" });
+  }
   // controllerchange reloads once the new worker takes over; if there is
   // no waiting worker (banner stale), reload directly after a short grace
   // period instead of hanging forever.
   setTimeout(() => { if (!reloadedFlag) location.reload(); }, 1500);
 }
 let reloadedFlag = false;
+let _swReg = null;
 function dismissUpdate() { $("#update-banner").classList.add("hidden"); }
 
 // Restore a draft saved before an update reload. Runs after init so the
-// sheets exist; only restores what the user had typed, nothing else.
-function restoreDraft() {
+// sheets exist. Restores context too: if the draft came from another
+// profile, switch back to it; if it was a correction, reopen the sheet in
+// correction mode for the same record.
+async function restoreDraft() {
   let raw = null;
   try { raw = sessionStorage.getItem("pwa-draft"); } catch (e) {}
   if (!raw) return;
-  try { sessionStorage.removeItem("pwa-draft"); } catch (e) {}
   let d;
-  try { d = JSON.parse(raw); } catch (e) { return; }
-  if (!d || !d.sheet || !d.data) return;
+  try { d = JSON.parse(raw); } catch (e) {
+    try { sessionStorage.removeItem("pwa-draft"); } catch (_) {}
+    return;
+  }
+  if (!d || !d.sheet || !d.data) {
+    try { sessionStorage.removeItem("pwa-draft"); } catch (_) {}
+    return;
+  }
+  // same-profile check: an unfinished entry belongs to one profile
+  if (d.profileId && (!profile || profile.id !== d.profileId)) {
+    const profiles = await Store.profiles();
+    const owner = profiles.find(p => p.id === d.profileId);
+    if (owner) {
+      await switchProfile(owner.id);
+    } else {
+      try { sessionStorage.removeItem("pwa-draft"); } catch (_) {}
+      toast("A draft from another profile could not be restored — that profile no longer exists.", true);
+      return;
+    }
+  }
   setTimeout(() => {
-    if (d.sheet === "log") {
-      openLogSheet(null);
-      $("#log-sheet-title").textContent = d.title || "Log a dose";
-      $("#u-name").value = d.data.name || "";
-      $("#u-amount").value = d.data.amount || "";
-      $("#u-unit").value = UNITS.includes(d.data.unit) ? d.data.unit : "";
-      $("#u-when").value = d.data.when || "";
-      $("#u-notes").value = d.data.notes || "";
-      lastLockedProduct = d.data.name || "";
-      showUnitHint(d.data.name, d.data.unit);
-      toast("Your unfinished entry was restored after the update.");
-    } else if (d.sheet === "symptom") {
-      openSymptomSheet();
-      $("#s-name").value = d.data.name || "";
-      $("#s-desc").value = d.data.desc || "";
-      $("#s-severity").value = ["1","2","3","4","5"].includes(d.data.severity)
-        ? d.data.severity : "3";
-      toast("Your unfinished symptom entry was restored after the update.");
-    } else if (d.sheet === "observation") {
-      openObservationSheet();
-      $("#o-when").value = d.data.when || "";
-      $("#o-notes").value = d.data.notes || "";
-      if (d.data.goals) {
-        for (const [k, v] of Object.entries(d.data.goals)) {
-          const el = document.querySelector(
-            `#observation-fields .gf[data-gkey="${CSS.escape(k)}"]`);
-          if (el) el.value = v;
+    try {
+      if (d.sheet === "log") {
+        // editingId !== null → reopen in CORRECTION mode for the same record
+        openLogSheet(d.editingId || null);
+        $("#log-sheet-title").textContent = d.title ||
+          (d.editingId ? "Correct entry" : "Log a dose");
+        $("#u-name").value = d.data.name || "";
+        $("#u-amount").value = d.data.amount || "";
+        $("#u-unit").value = UNITS.includes(d.data.unit) ? d.data.unit : "";
+        $("#u-when").value = d.data.when || "";
+        $("#u-notes").value = d.data.notes || "";
+        lastLockedProduct = d.data.name || "";
+        showUnitHint(d.data.name, d.data.unit);
+        toast(d.editingId
+          ? "Your unfinished correction was restored after the update."
+          : "Your unfinished entry was restored after the update.");
+      } else if (d.sheet === "symptom") {
+        openSymptomSheet();
+        $("#s-name").value = d.data.name || "";
+        $("#s-desc").value = d.data.desc || "";
+        $("#s-severity").value = ["1","2","3","4","5"].includes(d.data.severity)
+          ? d.data.severity : "3";
+        toast("Your unfinished symptom entry was restored after the update.");
+      } else if (d.sheet === "observation") {
+        openObservationSheet(d.editingId || null);
+        $("#o-when").value = d.data.when || "";
+        $("#o-notes").value = d.data.notes || "";
+        if (d.data.goals) {
+          for (const [k, v] of Object.entries(d.data.goals)) {
+            const el = document.querySelector(
+              `#observation-fields .gf[data-gkey="${CSS.escape(k)}"]`);
+            if (el) el.value = v;
+          }
         }
+        toast(d.editingId
+          ? "Your unfinished observation correction was restored after the update."
+          : "Your unfinished observation was restored after the update.");
+      } else if (d.sheet === "summary") {
+        openSummarySheet();
+        $("#sum-from").value = d.data.from || "";
+        $("#sum-to").value = d.data.to || "";
+        $("#sum-notes").checked = !!d.data.includeNotes;
+        $("#sum-questions").value = d.data.questions || "";
+        renderSummaryPreview();
+        toast("Your appointment summary draft was restored after the update.");
       }
-      toast("Your unfinished observation was restored after the update.");
-    } else if (d.sheet === "summary") {
-      openSummarySheet();
-      $("#sum-from").value = d.data.from || "";
-      $("#sum-to").value = d.data.to || "";
-      $("#sum-notes").checked = !!d.data.includeNotes;
-      $("#sum-questions").value = d.data.questions || "";
-      renderSummaryPreview();
-      toast("Your appointment summary draft was restored after the update.");
+      // the draft is consumed only once its fields were applied
+      try { sessionStorage.removeItem("pwa-draft"); } catch (_) {}
+    } catch (e) {
+      // keep the draft in storage so a manual reload can try again
+      toast("A draft could not be restored — reload this page once more to try again.", true);
+      console.error(e);
     }
   }, 400);
 }
@@ -1398,7 +1494,18 @@ function gotoTab(name) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  init();
+  // Storage failures (blocked DB upgrade, etc.) must be visible, not a
+  // silent half-loaded app.
+  init().catch(err => {
+    try {
+      const box = document.getElementById("offline-badge");
+      box.textContent = "The app could not start: " +
+        (err && err.message ? err.message : "unknown storage error") +
+        " — close other tabs of this app and reload.";
+      box.classList.remove("hidden");
+    } catch (_) {}
+    console.error(err);
+  });
   attachPicker("#u-name", "#u-name-dd", () => onProductChanged());
   $("#u-name").addEventListener("input", onProductChanged);
   attachPicker("#r-name", "#r-name-dd");

@@ -26,8 +26,11 @@ has not had legal review.</p>
 <h2>The short version</h2>
 <p>This is a personal journal app. Everything you type — profiles, doses,
 symptoms, observations, reminders — is stored only in your browser on your
-device (IndexedDB). The app does not send your records anywhere. There is no
-account, no server database, and no analytics.</p>
+device. Saved records live in IndexedDB. An entry you have not saved yet
+can be held temporarily in the browser's per-tab sessionStorage (so an
+unfinished form can survive an app update) — it stays in this tab on this
+device and is gone when the tab closes. The app does not send your records
+anywhere. There is no account, no server database, and no analytics.</p>
 
 <h2>What does leave your device</h2>
 <ul>
@@ -50,8 +53,9 @@ account, no server database, and no analytics.</p>
   third-party transmission of user data.</li>
   <li>The app never attaches data to feedback automatically — there is no
   such feature.</li>
-  <li>Data leaves the machine only when you explicitly export it, and
-  exports are scoped to your own records.</li>
+  <li>Data leaves the machine only when you explicitly export it. A backup
+  file includes <strong>every profile stored on this device</strong>, not
+  only the profile currently open — keep it accordingly private.</li>
 </ul>
 
 <h2>Who can see your data on this device</h2>

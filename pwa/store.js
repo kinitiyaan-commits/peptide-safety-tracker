@@ -24,10 +24,15 @@ const STORES = ["profiles", "usage", "symptoms", "observations",
 
 let _dbPromise = null;
 
-function openDB() {
-  if (_dbPromise) return _dbPromise;
-  _dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+// Open at an explicit version (the normal path), or — if the database has
+// already been upgraded beyond DB_VERSION (e.g. after rolling back the
+// app code, or a newer tab upgraded it) — fall back to opening whatever
+// version currently exists instead of failing with VersionError. Upgrade
+// handling is additive only, so it is safe at any version.
+function openDBVersioned(version) {
+  return new Promise((resolve, reject) => {
+    const req = version === undefined
+      ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, version);
     req.onupgradeneeded = () => {
       const db = req.result;
       // Data-preserving upgrade: create any store this release needs that an
@@ -69,6 +74,21 @@ function openDB() {
       resolve(db);
     };
     req.onerror = () => reject(req.error);
+  });
+}
+
+function openDB() {
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = openDBVersioned(DB_VERSION).catch(err => {
+    if (err && err.name === "VersionError") {
+      // The database is at a NEWER version than this code declares
+      // (possible after a code rollback). Records still open fine at the
+      // existing version — extra stores are simply ignored by this code.
+      _dbPromise = null;
+      return openDBVersioned(undefined);
+    }
+    _dbPromise = null;
+    throw err;
   });
   return _dbPromise;
 }

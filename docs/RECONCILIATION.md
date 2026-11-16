@@ -226,7 +226,12 @@ browser-verified (details in `docs/PWA.md`):
   draft captured to sessionStorage before reload and restored after,
   activation deletes only `peptide-safety-static-*` caches.
 - ✅ DB-upgrade safety: `onversionchange` close + `onblocked` surfaced as
-  a toast; upgrade path only creates stores (rollback-safe).
+  a toast; upgrade path only creates stores. **Rollback is NOT a plain
+  code revert:** production opens DB v1, this branch v2 — the old build
+  requesting v1 against an upgraded DB gets `VersionError`. A rollback
+  needs a DB-compatible build (this branch's `openDB` falls back to
+  opening without a fixed version, which future downgrades can rely on;
+  the currently deployed v1 build cannot).
 - ✅ Atomic validated imports: one multi-store transaction; revalidation
   at apply time; strict limits (ID pattern, 2 MB, counts, finite amounts,
   ISO dates, units/severities); cross-profile id collisions fatal;
@@ -254,3 +259,22 @@ browser-verified (details in `docs/PWA.md`):
   content (legal review), branding/license inventory sign-off.
 - 🔒 Real-phone checks (install prompt, standalone, safe areas, offline
   launch, narrow screen) — untested, owner task.
+
+## Correction pass (review of `859a664`, 2026-11-15)
+
+- ✅ ACCEPT_UPDATE targets `registration.waiting` (retained `_swReg`);
+  active-controller messaging only a stale-banner fallback. Verified: the
+  waiting worker was the one activated.
+- ✅ `Store.onBlocked` registered before any storage access; boot errors
+  shown visibly.
+- ✅ Drafts carry profile ID + correction record ID; restore switches
+  profile and reopens correction mode; sessionStorage failure is warned
+  honestly ("WILL BE LOST"); draft consumed only after successful apply.
+- ✅ Rollback corrected: old v1 code against an upgraded DB gets
+  `VersionError` — rollback needs a DB-compatible build, not a plain
+  revert; `openDB` now falls back to versionless open (verified in the
+  browser against a DB manually upgraded to v3).
+- ✅ Two-tab update: each tab silently preserves its own draft on
+  `controllerchange`; first-install claim does not reload.
+- ✅ Policy drafts: sessionStorage disclosure + "backup includes every
+  profile on this device" in privacy.html, terms.html, and the in-app note.

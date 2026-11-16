@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 PWA = Path(__file__).resolve().parent.parent / "pwa"
+ROOT = PWA.parent
 
 
 # ------------------------------------------------------------- shell ----
@@ -524,3 +525,97 @@ class TestAccuratePrivacyWording:
         assert "accessdata.fda.gov/scripts/cder/daf" in app
         assert "check approval per exact product" in app
         assert 'data.js' not in "x"  # sanity
+
+
+# ---------------- correction pass (review of 859a664) ----------------
+
+class TestUpdateTargetsWaitingWorker:
+    def test_accept_update_messages_registration_waiting(self):
+        app = (PWA / "app.js").read_text()
+        assert "_swReg = reg;" in app                      # registration retained
+        assert "_swReg.waiting.postMessage" in app
+
+    def test_controllerchange_only_reloads_after_an_update(self):
+        app = (PWA / "app.js").read_text()
+        seg = app.split("controllerchange", 1)[1].split("});", 1)[0]
+        assert "hadController" in app                      # first-install claim ignored
+        assert "saveDraftSilently()" in seg                # other tabs keep drafts
+        assert "location.reload()" in seg
+
+
+class TestOnBlockedRegistrationTiming:
+    def test_onblocked_assigned_before_first_storage_access(self):
+        app = (PWA / "app.js").read_text()
+        init_body = app.split("async function init()", 1)[1].split("if (\"serviceWorker\" in navigator)", 1)[0]
+        assigned = init_body.index("Store.onBlocked")
+        first_real_call = re.search(r"Store\.(?!onBlocked)\w+", init_body)
+        assert first_real_call is not None
+        assert assigned < first_real_call.start()
+
+    def test_init_failures_are_visible(self):
+        app = (PWA / "app.js").read_text()
+        boot = app.split("DOMContentLoaded", 1)[1].split("});", 1)[0]
+        assert "init().catch" in boot
+        assert "could not start" in boot
+
+
+class TestDraftContextPreserved:
+    def test_draft_carries_profile_and_editing_id(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function collectDraft", 1)[1].split("function draftHasContent", 1)[0]
+        assert "draft.profileId" in body
+        assert "editingUsageId" in body and "editingObservationId" in body
+
+    def test_restore_reopens_correction_mode(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function restoreDraft", 1)[1].split("\n// ----------------", 1)[0]
+        assert "openLogSheet(d.editingId || null)" in body
+        assert "openObservationSheet(d.editingId || null)" in body
+        assert "switchProfile(owner.id)" in body           # cross-profile drafts
+        assert "unfinished correction was restored" in body
+
+    def test_draft_removed_only_after_fields_applied(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function restoreDraft", 1)[1].split("\n// ----------------", 1)[0]
+        restore_tail = body.rsplit("removeItem(\"pwa-draft\")", 1)[1]
+        assert "consumed only once its fields were applied" in body
+        assert "toast(" in restore_tail or "removeItem" not in restore_tail
+
+    def test_storage_failure_is_honest(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function captureDraftForUpdate", 1)[1].split("\n}", 1)[0]
+        assert "storeDraft(d)" in body
+        assert "WILL BE LOST" in body                      # no promised restore
+
+
+class TestRollbackClaimAccuracy:
+    def test_store_falls_back_on_versionerror(self):
+        store = (PWA / "store.js").read_text()
+        assert "openDBVersioned" in store
+        assert 'err.name === "VersionError"' in store
+        assert "openDBVersioned(undefined)" in store
+
+    def test_docs_no_longer_claim_revert_is_safe(self):
+        for doc in ("docs/PWA.md", "docs/RECONCILIATION.md"):
+            text = (ROOT / doc).read_text()
+            assert "VersionError" in text
+            assert "older code ignores the extra" not in text
+            assert "plain code revert" in text or "plain\n  code revert" in text
+
+
+class TestPolicyDraftAccuracy:
+    def test_privacy_mentions_session_storage(self):
+        text = (PWA / "privacy.html").read_text()
+        assert "sessionStorage" in text
+        assert "every profile stored on this device" in text
+        assert "scoped to your own records" not in text
+
+    def test_terms_mentions_session_storage_and_all_profiles(self):
+        text = (PWA / "terms.html").read_text()
+        assert "sessionStorage" in text
+        assert "every profile on this device" in text
+
+    def test_in_app_storage_note_matches(self):
+        html = (PWA / "index.html").read_text()
+        assert "sessionStorage" in html
+        assert "every profile on this device" in html

@@ -150,9 +150,16 @@ keeping main's downward picker fix and unique profile form IDs:
   including draft capture, restore, and activation.
 - **DB-upgrade safety:** `onversionchange` closes the connection so a newer
   tab can upgrade; `onblocked` surfaces "close other tabs" via a toast
-  instead of hanging silently. Rollback note: the upgrade path only
-  creates missing stores; reverting code does not need a DB downgrade
-  (older code ignores the extra `productUnits` store).
+  instead of hanging silently. **Rollback:** production opens database
+  version 1 and this branch opens version 2 — an old build that requests
+  version 1 against an upgraded database fails with `VersionError`, so a
+  rollback CANNOT be a plain code revert. Rollback must ship a
+  DB-compatible build: `openDB()` in this branch already falls back to
+  opening without an explicit version on `VersionError`, so future
+  downgrades of this branch's own code are safe, but reverting to the
+  currently deployed v1 build would not be — that path must be patched
+  and tested before being relied on. The upgrade itself only creates
+  missing stores and never deletes.
 - **Atomic imports:** `Store.importAtomic` writes every record of an
   import in ONE multi-store transaction (replace-mode clears stores inside
   the same transaction, not before it). `validateExport` hardened: schema
@@ -205,6 +212,54 @@ profile A's records).
 **Still untested without a real phone:** install prompt, standalone
 display, safe-area layout, and true offline launch from the home-screen
 icon. Owner must run these before the Reddit post.
+
+## Correction pass (review of `859a664`, 2026-11-15)
+
+Four review corrections, all implemented and browser-verified; SW cache
+bumped to v5 because app code changed:
+
+- **ACCEPT_UPDATE now targets `registration.waiting`** — the installed,
+  not-yet-active worker — via a retained `_swReg` reference; messaging
+  the active controller remains only as a stale-banner fallback.
+  Browser-verified: the waiting v5 worker (not the active v4) was
+  activated by the button.
+- **`Store.onBlocked` is registered at the top of `init()`, before any
+  storage access**, and boot failures are surfaced visibly ("The app
+  could not start: …" banner + console) instead of a silent
+  half-initialized app.
+- **Drafts carry full context:** profile ID and the record ID being
+  corrected; restore switches back to the owning profile and reopens the
+  sheet in correction mode ("Correct entry", same `editingUsageId`).
+  Storage-failure honesty: if sessionStorage write fails, the confirm
+  says the entry WILL BE LOST instead of promising restoration; the
+  stored draft is consumed only after its fields are successfully
+  applied. Browser-verified end-to-end, including the failure path.
+- **Rollback claim corrected:** production opens DB v1; an old build
+  requesting v1 against an upgraded DB gets `VersionError` — a rollback
+  is NOT a plain code revert. `openDB()` now falls back to opening
+  without an explicit version on `VersionError` (additive-upgrade
+  handling is safe at any version). Browser-verified: DB manually
+  upgraded to v3 → app declares v2 → still works, records readable,
+  writes fine, DB left at v3 (non-destructive). Rolling back to the
+  currently deployed v1 build would still require a patched build and
+  testing.
+
+Two-tab update verified in the browser: tab A accepted the update with an
+unfinished correction open; tab B, holding an unfinished symptom form,
+preserved its draft silently on `controllerchange` (per-tab sessionStorage)
+and restored it after its own reload. `controllerchange` ignores the
+first-install claim (no pointless reload when the SW first controls the
+page).
+
+Policy drafts corrected, not just placeholders: privacy/terms now
+disclose per-tab sessionStorage for unsaved entries and state plainly
+that a backup file includes every profile on this device (the in-app
+"Where your data lives" note matches).
+
+Executable tests for all of the above were added to `tests/test_pwa.py`
+(classes `TestUpdateTargetsWaitingWorker`, `TestOnBlockedRegistrationTiming`,
+`TestDraftContextPreserved`, `TestRollbackClaimAccuracy`,
+`TestPolicyDraftAccuracy`). Full suite: 182 passed.
 
 ## Regenerating static data
 
