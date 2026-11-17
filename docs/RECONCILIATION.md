@@ -306,3 +306,21 @@ browser-verified (details in `docs/PWA.md`):
   the final privacy/terms text; real-phone checks (install, offline
   reopen, update with unfinished entry, record preservation); merge and
   deploy approvals. Branch remains unmerged.
+
+## Final feature pass from Reddit feedback (2026-11-16, from `af31a2b`)
+
+- ✅ "Already logged today" warning: live hint + non-blocking save guard
+  (second "Save entry" keeps both). Verified in the browser.
+- ✅ Both units shown: "300 mcg = 0.3 mg — same amount, both units" while
+  typing; mcg↔mg only, no IU/mL guessing, no syringe math, no dose text.
+- ✅ Vial log: user-entered mix + discard dates, neutral wording, new
+  `vials` store (DB v3 additive), export schema 3 with validation, old
+  backups still import, delete cascade updated. Verified: CRUD,
+  round-trip, real v2→v3 upgrade with record survival.
+- ✅ Dark-theme consistency: `color-scheme: dark`, bare-button reset,
+  dark file/date/autofill/scrollbar surfaces — white spots gone
+  (verified by screenshots).
+- ✅ Explicitly NOT built: syringe-units calculator (owner's call per
+  feedback), native notifications (Capacitor scope). Reminders stay
+  in-app only.
+- ✅ Suite: 217 passed (17 new checks). SW cache v8.

@@ -94,8 +94,7 @@ Implemented against this PWA (the deployed app) and browser-verified:
 
 - **Explicit units:** new products start at "Choose unit"; saving without
   a unit is blocked; the last confirmed unit per product **per profile**
-  is remembered (new `productUnits` store, DB v2) and shown with a
-  confirmation hint; changing products never carries over a unit.
+  is remembered (new `productUnits` store, DB v2) and shown with a  confirmation hint; changing products never carries over a unit.
 - **Repeat logging:** "Log again" on any dose (Today + History) opens a
   reviewable pre-filled form — time set to now, notes never copied,
   review warning shown before saving.
@@ -151,7 +150,8 @@ keeping main's downward picker fix and unique profile form IDs:
 - **DB-upgrade safety:** `onversionchange` closes the connection so a newer
   tab can upgrade; `onblocked` surfaces "close other tabs" via a toast
   instead of hanging silently. **Rollback:** production opens database
-  version 1 and this branch opens version 2 — an old build that requests
+  version 1 and this branch opens version 3 (v2 added `productUnits`, v3
+  added `vials`) — an old build that requests
   version 1 against an upgraded database fails with `VersionError`, so a
   rollback CANNOT be a plain code revert. Rollback must ship a
   DB-compatible build: `openDB()` in this branch already falls back to
@@ -159,7 +159,9 @@ keeping main's downward picker fix and unique profile form IDs:
   downgrades of this branch's own code are safe, but reverting to the
   currently deployed v1 build would not be — that path must be patched
   and tested before being relied on. The upgrade itself only creates
-  missing stores and never deletes.
+  missing stores and never deletes. Browser-verified: a real v2 database
+  with a legacy record upgraded to v3 in place — record survived, the new
+  `vials` store was created and works.
 - **Atomic imports:** `Store.importAtomic` writes every record of an
   import in ONE multi-store transaction (replace-mode clears stores inside
   the same transaction, not before it). `validateExport` hardened: schema
@@ -326,6 +328,58 @@ device-regulation question, liability wording, license). privacy.html
 covers: IndexedDB records, per-tab sessionStorage drafts, GitHub Pages
 hosting logs, external product-name searches, all-profile backups, and
 that downloaded/shared files leave the app's control. Suite: 200 passed.
+
+## Final feature pass from Reddit feedback (2026-11-16, from `af31a2b`)
+
+Owner-approved final scope based on r/Peptides feedback. SW cache **v8**,
+DB **v3** (adds the `vials` store). Three mistake-catching features and a
+UI-consistency pass. No syringe calculator (explicitly deferred by the
+feedback); reminders remain in-app only (native notifications = the
+Capacitor discussion, out of scope).
+
+**1. "Already logged today" warning (double-dose catch).** While the dose
+form is open, a live amber hint shows the user's most recent same-product
+entry from TODAY: "You already logged TestPeptide today at 9:02 AM." On
+save, a non-blocking guard repeats it inline and requires a second "Save
+entry" to keep both entries — a forgotten earlier dose can't be silently
+doubled, but a legitimate second dose is never refused. Reads only the
+user's own records for the active profile; corrections don't flag
+themselves. Browser-verified live hint + two-step save.
+
+**2. Both units shown (unit-mix-up catch).** While typing, the form shows
+the same amount in both scales: "300 mcg = 0.3 mg — same amount, both
+units." Pure ×1000 conversion between mcg and mg only; IU/units/mL get no
+conversion (those scales aren't inter-convertible and the app doesn't
+guess). No syringe math, no dose suggestion — it always displays exactly
+the amount the user typed. Browser-verified both directions + IU hiding.
+
+**3. Vial log (forgotten-mix-date catch).** Settings → "Vial log": the
+user records product name, the date mixed, and a discard date **the user
+chooses**. The list shows the dates and a plain day count ("11 days from
+today"). Neutral wording: the app "does not calculate stability, recommend
+dates, or advise any use." Stored in a new per-profile `vials` store
+(DB v3, additive upgrade), included in export (schema 3; old schema 1/2
+backups still import) with strict validation, wired into the profile
+delete cascade. Browser-verified: add/edit/delete (delete confirmed),
+discard-before-mix refused, export→import round-trip, and a real v2→v3
+upgrade preserving a legacy record.
+
+**UI consistency (dark-theme fixes).** The "random white spots" were
+browser-default surfaces: bare buttons (bottom nav, close ×, text links)
+rendered light-gray, and native date/time/file controls plus autofill
+rendered white. Fixed with `color-scheme: dark`, a bare-button reset that
+never overrides `.btn`/`.btn2`/`.fab`, dark `::file-selector-button`,
+calendar-picker-indicator tinting, dark autofill, selection, and
+scrollbars. Verified by screenshots: bottom nav, Settings, History
+(date pickers), and the log sheet are uniformly dark. Suite: 217 passed.
+
+**Dev note:** after changing app files, the browser's HTTP cache can keep
+serving stale assets to `python -m http.server` dev origins (no
+cache-control headers → heuristic caching), so an SW re-register may
+precache stale bytes. Workaround used in testing: serve on a fresh port
+(8081) or hard-refresh asset URLs. This is a dev-server artifact only —
+GitHub Pages sends proper caching headers and the SW cache versioning
+handles updates in production.
 
 ## Regenerating static data
 

@@ -365,8 +365,9 @@ async function loadAll() {
   lastSymptoms = await Store.byProfile("symptoms", profile.id);
   lastObservations = await Store.byProfile("observations", profile.id);
   lastReminders = await Store.byProfile("reminders", profile.id);
+  lastVials = await Store.byProfile("vials", profile.id);
   renderToday(); renderHistory(); renderCatalog(); renderSettings();
-  renderGoalChips(); renderProfileBadge();
+  renderGoalChips(); renderProfileBadge(); renderVials();
 }
 
 async function switchProfile(id) {
@@ -437,6 +438,8 @@ function openLogSheet(entryId) {
   form.reset();                                   // A.1: always open blank
   $("#u-unit").value = "";                        // no silent default unit
   $("#u-unit-hint").classList.add("hidden");
+  $("#u-equiv").classList.add("hidden");
+  $("#u-dup-hint").classList.add("hidden");
   if (editingUsageId) {
     const e = lastUsage.find(x => x.id === editingUsageId);
     if (e) {
@@ -446,12 +449,14 @@ function openLogSheet(entryId) {
       $("#u-when").value = toLocalInput(e.takenAt);
       $("#u-notes").value = e.notes || "";
       showUnitHint(e.peptideName, e.unit);
+      updateEquiv();
     }
   } else {
     $("#u-when").value = localDT();
   }
   clearErrors(form);
   lastLockedProduct = $("#u-name").value.trim();  // lock the current product
+  updateDupHint();
   $("#log-sheet").classList.remove("hidden");
   setTimeout(() => $("#u-name").focus(), 60);
 }
@@ -469,6 +474,55 @@ function showUnitHint(name, unit) {
     hint.textContent = `Unit shown from your previous "${name}" entry: ${unit} — confirm before saving.`;
     hint.classList.remove("hidden");
   } else hint.classList.add("hidden");
+}
+
+// ---- mistake-catching: already-logged notice (user's own records only) ----
+// Shows the most recent same-product entry from TODAY while the form is
+// open, so a forgotten earlier dose is visible BEFORE saving. Non-blocking:
+// it never refuses a save, it only makes the existing record visible.
+function updateDupHint() {
+  const hint = $("#u-dup-hint");
+  if (!hint || $("#log-sheet").classList.contains("hidden")) return;
+  hint.classList.add("hidden");
+  const name = $("#u-name").value.trim();
+  const whenVal = $("#u-when").value;
+  if (!name || !whenVal || !profile) return;
+  const day = localDTtoDay(new Date(whenVal));
+  const earlier = lastUsage
+    .filter(u => u.id !== editingUsageId &&
+      u.peptideName.toLowerCase() === name.toLowerCase() &&
+      localDTtoDay(new Date(u.takenAt)) === day)
+    .sort((a, b) => new Date(b.takenAt) - new Date(a.takenAt))[0];
+  if (earlier) {
+    hint.textContent = `You already logged ${earlier.peptideName} today at ` +
+      new Date(earlier.takenAt).toLocaleTimeString(undefined,
+        { hour: "numeric", minute: "2-digit" }) + ".";
+    hint.classList.remove("hidden");
+  }
+}
+
+// ---- mistake-catching: both units shown before saving ----
+// Displays the SAME amount in mcg and mg so an extra or missing zero
+// stands out. Pure unit conversion between these two scales only — the
+// app does no syringe/IU/mL math and makes no dose suggestion; the
+// displayed value is always exactly what the user typed.
+function updateEquiv() {
+  const el = $("#u-equiv");
+  if (!el || $("#log-sheet").classList.contains("hidden")) return;
+  el.classList.add("hidden");
+  const amount = parseFloat($("#u-amount").value);
+  const unit = $("#u-unit").value;
+  if (!(amount > 0)) return;
+  const fmt = (x) => String(Number(x.toFixed(6)));
+  if (unit === "mcg") {
+    el.textContent = `${fmt(amount)} mcg = ${fmt(amount / 1000)} mg — same amount, both units.`;
+    el.classList.remove("hidden");
+  } else if (unit === "mg") {
+    el.textContent = `${fmt(amount)} mg = ${fmt(amount * 1000)} mcg — same amount, both units.`;
+    el.classList.remove("hidden");
+  }
+  // IU / units / mL: no conversion shown — those scales are not
+  // inter-convertible and the app does not guess.
 }
 
 // Monotonic token guarding the async remembered-unit lookup: a slow result
@@ -503,6 +557,8 @@ async function onProductChanged() {
       showUnitHint(name, remembered);
     }
   }
+  updateDupHint();
+  updateEquiv();
 }
 
 function openSymptomSheet() {
@@ -638,10 +694,28 @@ async function doSaveUsage(form, { name, amount, unit, takenAt, notes }) {
     closeLogSheet(); await loadAll(); return;
   }
 
-  // duplicate guard (distinct from idempotency key): same product + amount +
-  // unit within 30 minutes asks for a confirmation instead of silently
-  // creating a second event. Saving again confirms the override.
+  // mistake-catching guard #1: same product already logged TODAY (the
+  // user's own earlier record, any amount/unit). Non-blocking — saving
+  // again confirms and keeps both entries; the notice just makes the
+  // earlier record visible so a forgotten dose can't happen silently.
   const isOverride = form.dataset.override === "1";
+  if (!isOverride) {
+    const day = localDTtoDay(new Date(takenAt));
+    const earlierToday = lastUsage
+      .filter(u => u.peptideName.toLowerCase() === name.toLowerCase() &&
+        localDTtoDay(new Date(u.takenAt)) === day)
+      .sort((a, b) => new Date(b.takenAt) - new Date(a.takenAt))[0];
+    if (earlierToday) {
+      formError("#u-error", `You already logged ${esc(name)} today at ` +
+        `${new Date(earlierToday.takenAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}. ` +
+        `Choose Save entry again to keep both.`);
+      form.dataset.override = "1";
+      return;
+    }
+  }
+  // mistake-catching guard #2 (distinct from idempotency key): same product
+  // + amount + unit within 30 minutes asks for a confirmation instead of
+  // silently creating a second event. Saving again confirms the override.
   if (!isOverride) {
     const dup = lastUsage.find(u => u.peptideName.toLowerCase() === name.toLowerCase() &&
       Number(u.amount) === amount && u.unit === unit &&
@@ -1067,6 +1141,104 @@ async function deleteReminder(id) {
   await loadAll();
 }
 
+// ---------------- VIAL LOG (user-entered supply records) ----------------
+// Each vial record stores only what the user enters: product name, the date
+// it was mixed, and a discard date the user chooses. The app displays these
+// dates and a plain day count between them — it does not calculate
+// stability, recommend discard dates, or advise any use.
+let lastVials = [];
+let editingVialId = null;
+
+const DAY_MS = 86400000;
+function daysFromToday(dateStr) {
+  // whole days between today's local calendar day and the given YYYY-MM-DD
+  const today = localDTtoDay(new Date());
+  const t = new Date(today + "T00:00:00");
+  const d = new Date(dateStr + "T00:00:00");
+  return Math.round((d - t) / DAY_MS);
+}
+const fmtDay = (dateStr) => new Date(dateStr + "T00:00:00")
+  .toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+
+async function addVial(ev) {
+  ev.preventDefault();
+  const name = $("#v-name").value.trim();
+  const mixed = $("#v-mixed").value;
+  const discard = $("#v-discard").value;
+  if (!name) { formError("#v-error", "Enter the product name.", $("#v-name")); return; }
+  if (discard && mixed && discard < mixed) {
+    formError("#v-error", "The discard date can't be before the mix date — check the dates.", $("#v-discard"));
+    return;
+  }
+  const rec = {
+    id: editingVialId || uid(),
+    profileId: profile.id,
+    peptideName: name,
+    mixedOn: mixed || null,
+    discardOn: discard || null,
+    notes: $("#v-notes").value.trim(),
+  };
+  await Store.put("vials", rec);
+  editingVialId = null;
+  $("#vial-form").reset();
+  $("#v-error").textContent = "";
+  toast("✓ Vial record saved");
+  await loadAll();
+}
+
+function editVial(id) {
+  const v = lastVials.find(x => x.id === id);
+  if (!v) return;
+  editingVialId = id;
+  $("#v-name").value = v.peptideName;
+  $("#v-mixed").value = v.mixedOn || "";
+  $("#v-discard").value = v.discardOn || "";
+  $("#v-notes").value = v.notes || "";
+  $("#vial-form").scrollIntoView({ block: "nearest" });
+  toast("Editing this vial record — save to update it");
+}
+
+async function deleteVial(id) {
+  const v = lastVials.find(x => x.id === id);
+  if (v && !confirm(`Delete the ${v.peptideName} vial record? This only removes the entry from your log.`)) return;
+  await Store.delete("vials", id);
+  toast("Vial record deleted");
+  await loadAll();
+}
+
+function renderVials() {
+  const box = $("#vials-list");
+  if (!box) return;
+  if (!lastVials.length) {
+    box.innerHTML = `<p class="text-xs text-slate-500">No vial records yet. Everything here is what you enter — nothing is calculated for you.</p>`;
+    return;
+  }
+  const rows = [...lastVials].sort((a, b) =>
+    String(b.mixedOn || "").localeCompare(String(a.mixedOn || "")));
+  box.innerHTML = rows.map(v => {
+    const mixed = v.mixedOn ? `Mixed ${esc(fmtDay(v.mixedOn))}` : "Mix date not entered";
+    let discard = "";
+    if (v.discardOn) {
+      const n = daysFromToday(v.discardOn);
+      const rel = n > 0 ? `${n} day${n === 1 ? "" : "s"} from today`
+        : n === 0 ? "today" : `${-n} day${n === -1 ? "" : "s"} ago`;
+      discard = ` · Discard date you set: ${esc(fmtDay(v.discardOn))} (${rel})`;
+    } else {
+      discard = " · No discard date entered";
+    }
+    return `<div class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+      <div class="flex justify-between gap-3">
+        <div><p class="text-sm font-semibold">${esc(v.peptideName)}</p>
+          <p class="text-xs text-slate-400">${mixed}${discard}</p>
+          ${v.notes ? `<p class="text-xs text-slate-500">${esc(v.notes)}</p>` : ""}</div>
+        <div class="text-right shrink-0 space-y-1">
+          <button data-act="edit-vial" data-id="${esc(v.id)}" class="text-xs text-sky-400 underline">Edit</button>
+          <button data-act="delete-vial" data-id="${esc(v.id)}" class="text-xs text-slate-400 underline">Delete</button>
+        </div>
+      </div></div>`;
+  }).join("");
+}
+
 // ---------------- SETTINGS ----------------
 async function renderSettings() {
   const profiles = await Store.profiles();
@@ -1145,7 +1317,7 @@ function exportData() {
   return Store.profiles().then(async profiles => {
     const data = {
       app: "peptide-safety-tracker",
-      schema: 2,   // 2 = includes remembered productUnits per profile
+      schema: 3,   // 3 = adds user-entered vial records per profile
       exportedAt: nowISO(),
       disclaimer: "User-entered journal data. Not medical advice; not verified by this app. Keep private.",
       profiles: [],
@@ -1158,6 +1330,7 @@ function exportData() {
         symptoms: (await Store.byProfile("symptoms", p.id)).map(r => ({ ...r })),
         observations: (await Store.byProfile("observations", p.id)).map(r => ({ ...r })),
         reminders: (await Store.byProfile("reminders", p.id)).map(r => ({ ...r })),
+        vials: (await Store.byProfile("vials", p.id)).map(r => ({ ...r })),
         productUnits: (await Store.getAll("productUnits"))
           .filter(u => u.profileId === p.id).map(u => ({ ...u })),
       });
@@ -1178,7 +1351,7 @@ function exportData() {
 const IMPORT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const IMPORT_LIMITS = {
   profiles: 50, usage: 5000, symptoms: 5000, observations: 5000,
-  reminders: 500, productUnits: 2000,
+  reminders: 500, productUnits: 2000, vials: 500,
 };
 const IMPORT_TOTAL_LIMIT = 12000;
 
@@ -1187,10 +1360,26 @@ function validISODate(v) {
     !Number.isNaN(new Date(v).getTime());
 }
 
+// vial dates are plain calendar days (from a date input): YYYY-MM-DD
+function validDay(v) {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+    !Number.isNaN(new Date(v + "T00:00:00").getTime());
+}
+
+// vial records: product name + user-entered dates; nothing is calculated
+function validVialRecord(r) {
+  return typeof r.peptideName === "string" && r.peptideName.length > 0 &&
+    r.peptideName.length <= 200 &&
+    (r.mixedOn === undefined || r.mixedOn === null || validDay(r.mixedOn)) &&
+    (r.discardOn === undefined || r.discardOn === null || validDay(r.discardOn)) &&
+    (r.notes === undefined || (typeof r.notes === "string" && r.notes.length <= 200));
+}
+
 function validateExport(data) {
   // Returns {ok, errors[], counts} — strict enough to refuse junk and
   // malicious files, loose enough to accept legit exports from this app
-  // (schema 1 and 2). Everything is validated BEFORE anything is written.
+  // (schema 1, 2, and 3). Everything is validated BEFORE anything is
+  // written.
   const errors = [];
   const fatal = (m) => errors.push(m);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
@@ -1199,14 +1388,14 @@ function validateExport(data) {
   if (data.app !== "peptide-safety-tracker") {
     fatal("Not an export of this app (wrong app id).");
   }
-  if (data.schema !== 1 && data.schema !== 2) {
+  if (data.schema !== 1 && data.schema !== 2 && data.schema !== 3) {
     fatal("Unknown export schema version.");
   }
   if (!Array.isArray(data.profiles) || !data.profiles.length) {
     fatal("No profiles in export.");
   }
   const counts = { profiles: 0, usage: 0, symptoms: 0, observations: 0,
-                   reminders: 0, productUnits: 0 };
+                   reminders: 0, productUnits: 0, vials: 0 };
   let total = 0;
   const profileIds = new Set();
   const seenIds = new Map();     // "store:id" -> owning profileId
@@ -1227,6 +1416,7 @@ function validateExport(data) {
     ["reminders", "reminders", r => typeof r.peptideName === "string" &&
         r.peptideName.length <= 200 &&
         /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+    ["vials", "vials", validVialRecord],
   ];
   if (Array.isArray(data.profiles)) {
     if (data.profiles.length > IMPORT_LIMITS.profiles) {
@@ -1248,6 +1438,8 @@ function validateExport(data) {
       counts.profiles++;
       for (const [key, store, check] of checks) {
         if (!Array.isArray(block[key])) {
+          // exports from schema 1/2 legitimately contain no vial records
+          if (key === "vials" && data.schema !== 3) continue;
           fatal(`${key} list missing for ${String(block.profile.name)}.`);
           continue;
         }
@@ -1370,14 +1562,14 @@ async function runImport(mode) {
   }
   const clearStores = mode === "replace"
     ? ["profiles", "usage", "symptoms", "observations", "reminders",
-       "goals", "meta", "productUnits"] : [];
+       "goals", "meta", "productUnits", "vials"] : [];
   const writes = [];
   if (mode === "merge") {
     // dedupe against what is already on the device (records with an id
     // that exists here are skipped, not overwritten)
     const existing = new Set();
     for (const store of ["profiles", "usage", "symptoms", "observations",
-                         "reminders", "productUnits"]) {
+                         "reminders", "productUnits", "vials"]) {
       for (const r of await Store.getAll(store)) existing.add(store + ":" + r.id);
     }
     const skip = (store, id) => existing.has(store + ":" + id);
@@ -1396,6 +1588,7 @@ async function runImport(mode) {
         ["observations", "observations", () => true],
         ["reminders", "reminders",
          r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+        ["vials", "vials", validVialRecord],
       ]) {
         writes.push({ store, records: (block[key] || [])
           .filter(r => r && r.id && IMPORT_ID_RE.test(String(r.id)) &&
@@ -1413,7 +1606,7 @@ async function runImport(mode) {
       const pid = block.profile.id;
       writes.push({ store: "profiles", records: [{ ...block.profile }] });
       writes.push({ store: "productUnits", records:
-        (data.schema === 2 ? (block.productUnits || []) : [])
+        (data.schema >= 2 ? (block.productUnits || []) : [])
         .filter(u => u && u.id && IMPORT_ID_RE.test(String(u.id)) &&
                UNITS.includes(u.unit))
         .map(u => ({ ...u, profileId: pid })) });
@@ -1423,6 +1616,7 @@ async function runImport(mode) {
         ["observations", "observations", () => true],
         ["reminders", "reminders",
          r => /^[0-2][0-9]:[0-5][0-9]$/.test(r.timeOfDay)],
+        ["vials", "vials", validVialRecord],
       ]) {
         writes.push({ store, records: (block[key] || [])
           .filter(r => r && r.id && IMPORT_ID_RE.test(String(r.id)) && check(r))
@@ -1484,6 +1678,8 @@ const DELEGATED_ACTIONS = {
     if (r) toggleReminder(id, r.enabled === false);
   },
   "delete-reminder": (id) => deleteReminder(id),
+  "edit-vial": (id) => editVial(id),
+  "delete-vial": (id) => deleteVial(id),
 };
 document.addEventListener("click", (ev) => {
   const btn = ev.target.closest("[data-act]");
@@ -1545,7 +1741,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   attachPicker("#u-name", "#u-name-dd", () => onProductChanged());
   $("#u-name").addEventListener("input", onProductChanged);
+  $("#u-amount").addEventListener("input", updateEquiv);
+  $("#u-unit").addEventListener("change", () => { updateEquiv(); });
+  $("#u-when").addEventListener("change", updateDupHint);
+  $("#u-when").addEventListener("input", updateDupHint);
   attachPicker("#r-name", "#r-name-dd");
+  attachPicker("#v-name", "#v-name-dd");
   $("#hist-q").addEventListener("input", renderHistory);
   $("#hist-type").addEventListener("change", renderHistory);
   $("#hist-from").addEventListener("change", renderHistory);

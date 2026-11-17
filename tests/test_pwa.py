@@ -434,12 +434,14 @@ class TestAtomicImport:
         assert "more than one profile" in app
         assert "Duplicate profile id" in app
 
-    def test_schema_2_export_includes_product_units(self):
+    def test_current_schema_export_includes_product_units(self):
         app = self._app()
-        assert "schema: 2" in app
+        assert "schema: 3" in app
         assert "productUnits" in app.split("function exportData", 1)[1].split("function validateExport", 1)[0]
         # schema-1 imports rebuild remembered units from most recent usage
         assert 'data.schema === 1' in app and "rememberUnit" in app
+        # schema-3 exports carry vial records
+        assert "vials:" in app.split("function exportData", 1)[1].split("const blob", 1)[0]
 
     def test_import_preview_sensitivity_note(self):
         app = self._app()
@@ -750,3 +752,129 @@ class TestPolicyFinalization:
     def test_exports_downloaded_shared_files_disclosure(self):
         text = (PWA / "privacy.html").read_text()
         assert "no longer controls it" in text
+
+
+# ---------------- mistake-catching features + UI pass (2026-11-16) ----------------
+
+class TestAlreadyLoggedWarning:
+    def test_live_hint_element_and_logic(self):
+        html = (PWA / "index.html").read_text()
+        app = (PWA / "app.js").read_text()
+        assert 'id="u-dup-hint"' in html
+        body = app.split("function updateDupHint", 1)[1].split("\nfunction ", 1)[0]
+        assert "localDTtoDay" in body and "peptideName.toLowerCase()" in body
+        assert "editingUsageId" in body          # corrections don't flag themselves
+        assert "You already logged" in body
+
+    def test_save_time_guard_non_blocking(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("mistake-catching guard #1", 1)[1].split("mistake-catching guard #2", 1)[0]
+        assert "Choose Save entry again to keep both." in body   # explicit, not silent
+        assert 'form.dataset.override = "1"' in body
+        assert "return;" in body
+
+    def test_never_blocks_or_recommends(self):
+        app = (PWA / "app.js").read_text()
+        # the guard only reports the user's own earlier record
+        assert "lastUsage" in app.split("mistake-catching guard #1", 1)[1][:2000]
+
+    def test_wired_to_inputs(self):
+        app = (PWA / "app.js").read_text()
+        assert '$("#u-when").addEventListener("change", updateDupHint)' in app
+        assert "updateDupHint();" in app.split("async function onProductChanged", 1)[1]
+
+
+class TestBothUnitsShown:
+    def test_equiv_element_and_conversion(self):
+        html = (PWA / "index.html").read_text()
+        app = (PWA / "app.js").read_text()
+        assert 'id="u-equiv"' in html
+        body = app.split("function updateEquiv", 1)[1].split("\n// Monotonic", 1)[0]
+        assert "amount / 1000" in body and "amount * 1000" in body
+        assert "same amount, both units" in body
+
+    def test_no_iu_ml_conversion_guessed(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function updateEquiv", 1)[1].split("\n// Monotonic", 1)[0]
+        assert "IU" in body and "does not guess" in body
+
+    def test_no_dose_suggestion(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("function updateEquiv", 1)[1].split("\n// Monotonic", 1)[0]
+        # only the user's own number is ever displayed, converted 1:1 between scales
+        assert "recommend" not in body.lower()
+        assert "suggest" not in body.lower()
+
+
+class TestVialLog:
+    def test_store_v3_and_vials_store(self):
+        store = (PWA / "store.js").read_text()
+        assert "DB_VERSION = 3" in store
+        assert '"vials"' in store
+        assert '["vials"]' in store               # deleteProfile cascade
+
+    def test_markup_fields(self):
+        html = (PWA / "index.html").read_text()
+        assert 'id="vial-form"' in html
+        for el in ("v-name", "v-mixed", "v-discard", "v-notes", "v-error", "vials-list"):
+            assert f'id="{el}"' in html
+        assert "Discard date (your choice)" in html
+        assert "does not calculate stability" in html   # neutral wording
+
+    def test_crud_functions(self):
+        app = (PWA / "app.js").read_text()
+        for fn in ("async function addVial", "function editVial",
+                   "async function deleteVial", "function renderVials"):
+            assert fn in app
+        assert '"edit-vial"' in app and '"delete-vial"' in app
+        assert "lastVials = await Store.byProfile" in app
+        assert "renderVials()" in app.split("async function loadAll", 1)[1]
+
+    def test_delete_has_confirm(self):
+        app = (PWA / "app.js").read_text()
+        body = app.split("async function deleteVial", 1)[1].split("function renderVials", 1)[0]
+        assert "confirm(" in body
+
+    def test_export_schema3_and_validation(self):
+        app = (PWA / "app.js").read_text()
+        assert "schema: 3" in app
+        assert "validVialRecord" in app
+        body = app.split("function validVialRecord", 1)[1].split("function validateExport", 1)[0]
+        assert "validDay" in body
+        # old exports (schema 1/2, no vials) still accepted
+        seg = app.split("if (!Array.isArray(block[key]))", 1)[1][:400]
+        assert 'key === "vials" && data.schema !== 3' in app
+        # replace-mode wipes vials too
+        assert '"productUnits", "vials"' in app
+        # merge dedupe includes vials
+        assert '"productUnits", "vials"])' in app
+
+    def test_no_recommendations_in_vial_ui(self):
+        html = (PWA / "index.html").read_text()
+        seg = html.split("Vial log", 1)[1][:700].lower()
+        # the only "recommend" allowed is the explicit refusal of recommending
+        assert "does not calculate stability, recommend dates" in seg
+        for banned in ("we recommend", "should discard", "safe until", "expires"):
+            assert banned not in seg
+
+
+class TestDarkThemeConsistency:
+    def test_color_scheme_dark_declared(self):
+        html = (PWA / "index.html").read_text()
+        assert "color-scheme:dark" in html
+
+    def test_bare_buttons_never_light(self):
+        html = (PWA / "index.html").read_text()
+        assert "button{background:transparent" in html
+
+    def test_native_controls_dark(self):
+        html = (PWA / "index.html").read_text()
+        assert "file-selector-button" in html
+        assert "calendar-picker-indicator" in html
+        assert "autofill" in html
+
+    def test_nav_has_no_default_background(self):
+        html = (PWA / "index.html").read_text()
+        nav = html.split("<nav", 1)[1].split("</nav>", 1)[0]
+        for btn in ("nav-today", "nav-history", "nav-catalog", "nav-settings"):
+            assert btn in nav

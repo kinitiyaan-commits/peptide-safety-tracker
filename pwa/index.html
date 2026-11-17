@@ -10,10 +10,24 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./styles.css">
   <style>
+    :root{color-scheme:dark}
     body{background:#020617;color:#f1f5f9;font-family:system-ui,-apple-system,sans-serif}
+    /* bare buttons must never show the browser's default light background */
+    button{background:transparent;border:none;color:inherit;font:inherit;cursor:pointer}
     .inp{background:#0f172a;border:1px solid #334155;border-radius:.6rem;padding:.6rem .75rem;width:100%;color:#f1f5f9;font-size:.95rem}
     .inp:focus{outline:2px solid #059669;border-color:#059669}
     .inp.invalid{border-color:#dc2626}
+    /* date/time pickers and the file input inherit the dark theme */
+    input[type="file"]{color:#94a3b8}
+    input[type="file"]::file-selector-button{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:.5rem;padding:.4rem .75rem;margin-right:.6rem;cursor:pointer;font:inherit;font-size:.8rem}
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator,
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.65) sepia(.1) saturate(3) hue-rotate(100deg)}
+    input:-webkit-autofill{-webkit-text-fill-color:#f1f5f9;-webkit-box-shadow:0 0 0 40rem #0f172a inset}
+    ::selection{background:#065f46;color:#fff}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-track{background:#020617}
+    ::-webkit-scrollbar-thumb{background:#334155;border-radius:9999px}
     .card{background:#0f172a;border:1px solid #1e293b;border-radius:1rem}
     .chip{border:1px solid #475569;border-radius:9999px;padding:.4rem .85rem;font-size:.8rem;color:#e2e8f0;background:#0f172a}
     .btn{background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-weight:700;border-radius:.6rem;padding:.75rem 1.25rem;font-size:.9rem}
@@ -162,6 +176,24 @@
       </div>
 
       <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Vial log <span class="text-xs text-slate-400 font-normal">(your own supply records)</span></h3>
+        <p class="text-xs text-slate-500">Record when you mixed a vial and the discard date <strong>you</strong> choose. The app stores and displays only what you enter — it does not calculate stability, recommend dates, or advise any use.</p>
+        <form id="vial-form" onsubmit="addVial(event)" class="space-y-2">
+          <div class="picker-wrap"><input id="v-name" class="inp" placeholder="Product name" maxlength="80" autocomplete="off"><div id="v-name-dd" class="picker-list hidden"></div></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs text-slate-400 mb-1">Date mixed</label>
+              <input id="v-mixed" type="date" class="inp"></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Discard date (your choice)</label>
+              <input id="v-discard" type="date" class="inp"></div>
+          </div>
+          <input id="v-notes" class="inp" placeholder="Notes (optional)" maxlength="200">
+          <div class="err" id="v-error"></div>
+          <button class="btn2 w-full !py-2 text-xs">Add vial record</button>
+        </form>
+        <div id="vials-list" class="space-y-2"></div>
+      </div>
+
+      <div class="space-y-2">
         <h3 class="font-bold text-emerald-300">Export &amp; restore</h3>
         <p id="last-backup" class="text-xs text-emerald-300"></p>
         <p id="backup-reminder" class="hidden text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2"></p>
@@ -237,8 +269,10 @@
           <select id="u-unit" class="inp"><option value="">Choose unit</option><option>mcg</option><option>mg</option><option>IU</option><option>units</option><option>mL</option></select>
           <p id="u-unit-hint" class="hidden text-[.7rem] text-emerald-300 pt-0.5"></p></div>
       </div>
+      <p id="u-equiv" class="hidden text-[.7rem] text-emerald-300">Same amount in both units — an extra or missing zero stands out here.</p>
       <div><label class="block text-xs text-slate-400 mb-1">When</label>
         <input id="u-when" type="datetime-local" class="inp"></div>
+      <p id="u-dup-hint" class="hidden text-[.7rem] text-amber-300"></p>
       <div><label class="block text-xs text-slate-400 mb-1">Notes (optional)</label>
         <input id="u-notes" class="inp" placeholder="Anything worth remembering" maxlength="300"></div>
       <div class="err" id="u-error"></div>

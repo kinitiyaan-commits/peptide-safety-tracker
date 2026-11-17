@@ -9,18 +9,20 @@
  *   symptoms       {id, profileId, peptideName, severity(1-5), description, loggedAt}
  *   observations   {id, profileId, takenAt, notes, goalData?, corrections[]}
  *   reminders      {id, profileId, peptideName, timeOfDay, days, notes, enabled}
+ *   vials          {id, profileId, peptideName, mixedOn?, discardOn?, notes?}
  *   goals          {profileId, goalKeys[], customText?}   (one per profile)
  *   meta           {key, value}                            (e.g. active profile)
  */
 
 const DB_NAME = "peptide-safety-tracker";
 // v2 adds "productUnits" (remembered last-confirmed unit per product).
+// v3 adds "vials" (user-entered supply log: mix date + discard date).
 // The upgrade path below only CREATES missing stores — it never deletes or
 // clears anything, so records from any previous release survive updates.
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = ["profiles", "usage", "symptoms", "observations",
-                "reminders", "goals", "meta", "productUnits"];
+                "reminders", "goals", "meta", "productUnits", "vials"];
 
 let _dbPromise = null;
 
@@ -154,7 +156,8 @@ const Store = {
   },
   async deleteProfile(profileId) {
     // cascade: every owned record is removed with the profile
-    const owned = [["usage"], ["symptoms"], ["observations"], ["reminders"]];
+    const owned = [["usage"], ["symptoms"], ["observations"], ["reminders"],
+                   ["vials"]];
     for (const [store] of owned) {
       const rows = (await this.getAll(store)).filter(r => r.profileId === profileId);
       for (const r of rows) await this.delete(store, r.id);
