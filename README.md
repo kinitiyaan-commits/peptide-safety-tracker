@@ -11,13 +11,14 @@ never recommends doses, and never rates brands as safe or unsafe.
 > release.** The production app lives on `main` and is what GitHub Pages
 > serves today. This branch is labeled "BETA" in the app header, shows a
 > beta banner on every screen, and exists to collect feedback before the
-> production release. Everything is still local-first: your data stays in
-> your browser on your device — no account, no server, no analytics. Do not
-> enter real health records in the beta if you are not comfortable with
-> that; synthetic/demo entries are enough for feedback. The public-facing
-> pages (`privacy.html`, `terms.html`) may still contain marked
-> `[OWNER TO SUPPLY]` placeholders — final operator/contact details are
-> pending and are not invented.
+> production release. The project is limited to synthetic/demo data until a
+> privacy and security review is complete: **do not enter real health
+> information**. Journal records are stored in the browser on your device;
+> hosting providers may still receive IP addresses and standard server logs.
+> The public-facing pages (`privacy.html`, `terms.html`) may still contain
+> marked `[OWNER TO SUPPLY]` placeholders — final operator/contact details are
+> pending and are not invented. See [`docs/REDDIT_FEEDBACK.md`](docs/REDDIT_FEEDBACK.md)
+> for cautious preview and posting guidance.
 
 Two deliverables live in this repository:
 
