@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#059669">
+  <title>Peptide Safety Tracker</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    :root{color-scheme:dark}
+    body{background:#020617;color:#f1f5f9;font-family:system-ui,-apple-system,sans-serif}
+    /* bare buttons must never show the browser's default light background */
+    button{background:transparent;border:none;color:inherit;font:inherit;cursor:pointer}
+    .inp{background:#0f172a;border:1px solid #334155;border-radius:.6rem;padding:.6rem .75rem;width:100%;color:#f1f5f9;font-size:.95rem}
+    .inp:focus{outline:2px solid #059669;border-color:#059669}
+    .inp.invalid{border-color:#dc2626}
+    /* date/time pickers and the file input inherit the dark theme */
+    input[type="file"]{color:#94a3b8}
+    input[type="file"]::file-selector-button{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:.5rem;padding:.4rem .75rem;margin-right:.6rem;cursor:pointer;font:inherit;font-size:.8rem}
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator,
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator{filter:invert(.65) sepia(.1) saturate(3) hue-rotate(100deg)}
+    input:-webkit-autofill{-webkit-text-fill-color:#f1f5f9;-webkit-box-shadow:0 0 0 40rem #0f172a inset}
+    ::selection{background:#065f46;color:#fff}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-track{background:#020617}
+    ::-webkit-scrollbar-thumb{background:#334155;border-radius:9999px}
+    .card{background:#0f172a;border:1px solid #1e293b;border-radius:1rem}
+    .chip{border:1px solid #475569;border-radius:9999px;padding:.4rem .85rem;font-size:.8rem;color:#e2e8f0;background:#0f172a}
+    .btn{background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-weight:700;border-radius:.6rem;padding:.75rem 1.25rem;font-size:.9rem}
+    .btn2{background:#1e293b;color:#e2e8f0;font-weight:600;border-radius:.6rem;padding:.75rem 1.25rem;font-size:.9rem;border:1px solid #334155}
+    details>summary{cursor:pointer;list-style:none}
+    details>summary::-webkit-details-marker{display:none}
+    .fab{width:3.75rem;height:3.75rem;border-radius:9999px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:1.75rem;box-shadow:0 8px 24px rgba(5,150,105,.4)}
+    .err{color:#f87171;font-size:.8rem;min-height:1.1rem}
+    .picker-wrap{position:relative}
+    .picker-list{position:absolute;left:0;right:0;top:100%;margin-top:.3rem;z-index:70;background:#0f172a;border:1px solid #334155;border-radius:.6rem;max-height:15rem;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+    .hidden{display:none!important}
+    main{padding-bottom:7rem}
+  </style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between gap-2">
+  <h1 class="font-black tracking-tight text-lg">Peptide Safety <span class="text-emerald-400">Tracker</span></h1>
+  <div class="flex items-center gap-2">
+    <span class="text-[.7rem] font-bold text-emerald-300 !border-emerald-500 border rounded-full px-2 py-1" title="Beta / feedback version — not the production release">BETA</span>
+    <span id="profile-badge" class="text-xs bg-slate-900 border border-slate-700 rounded-full px-3 py-1"></span>
+  </div>
+</header>
+<div id="beta-banner" class="bg-emerald-950/60 text-emerald-200 text-xs py-1.5 px-4 text-center border-b border-slate-800">Beta / feedback version — a prototype for feedback, not the production release. Your data stays in this browser on this device.</div>
+<div id="offline-badge" class="hidden bg-amber-900/60 text-amber-200 text-xs text-center py-1.5 px-4">Offline — the app still works; your data is on this device.</div>
+<div id="update-banner" class="hidden bg-emerald-950/60 text-emerald-200 text-xs py-2 px-4 flex items-center justify-center gap-3 flex-wrap text-center">
+  <p>Update available — reload whenever you're not in the middle of logging. Your records are not affected.</p>
+  <button onclick="applyUpdate()" class="text-xs font-bold text-white bg-emerald-700 rounded-lg px-3 py-1">Reload &amp; update</button>
+  <button onclick="dismissUpdate()" class="text-xs underline">Not now</button>
+</div>
+
+<main class="max-w-3xl mx-auto p-4 space-y-6">
+
+  <!-- First run: create a profile -->
+  <div id="first-run" class="hidden card p-6 space-y-3">
+    <h2 class="text-xl font-bold">Create your first profile</h2>
+    <p class="text-sm text-slate-400">All data stays in this browser on this device — nothing you type is sent to any server. This app is for adults organizing existing records. Profiles organize records; they are not passwords, and anyone who can use this device can open any profile. See the <a href="./privacy.html" class="text-emerald-400 underline">privacy notice</a> and <a href="./terms.html" class="text-emerald-400 underline">terms</a>.</p>
+    <form onsubmit="createProfile(event)" class="space-y-2">
+      <input id="new-profile-name" name="pname" class="inp" placeholder="Profile name" maxlength="40">
+      <button class="btn w-full">Create profile</button>
+    </form>
+  </div>
+
+  <!-- Disclaimer: one line + Learn more -->
+  <div class="bg-amber-950/30 border border-amber-900/60 p-3 rounded-xl text-xs text-amber-100 leading-relaxed">
+    <strong>Disclaimer:</strong> <span id="disclaimer-line">This app is not medical advice; many research peptides are not FDA-approved.</span>
+    <details class="mt-1"><summary class="text-amber-300 underline">Learn more</summary>
+      <span id="disclaimer-more" class="block pt-1 text-amber-200/90"></span>
+    </details>
+  </div>
+
+  <!-- TODAY -->
+  <section id="sec-today" class="space-y-4">
+    <div class="card p-6 space-y-3">
+      <h2 class="text-2xl font-black">Today <span id="today-date" class="text-sm font-semibold text-slate-400"></span></h2>
+      <p id="dash-sub" class="text-sm text-slate-400"></p>
+      <p class="text-xs text-slate-500">Use the <strong>+</strong> button below to log a dose, a symptom, or an observation.</p>
+      <div id="today-reminders" class="space-y-2"></div>
+      <div id="today-recent" class="space-y-2"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="sec-history" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">History</h2>
+      <div class="flex gap-2 flex-wrap">
+        <input id="hist-q" class="inp !w-auto flex-1 min-w-[8rem]" placeholder="Filter by product or text…">
+        <select id="hist-type" class="inp !w-auto">
+          <option value="all">All events</option>
+          <option value="dose">Doses</option>
+          <option value="symptom">Symptoms</option>
+          <option value="observation">Observations</option>
+        </select>
+      </div>
+      <div class="flex gap-2 flex-wrap items-center">
+        <label class="text-xs text-slate-400" for="hist-from">From</label>
+        <input id="hist-from" type="date" class="inp !w-auto">
+        <label class="text-xs text-slate-400" for="hist-to">to</label>
+        <input id="hist-to" type="date" class="inp !w-auto">
+        <button onclick="clearDateFilter()" class="text-xs text-slate-400 underline">Clear dates</button>
+      </div>
+      <div id="history-list" class="space-y-2"></div>
+      <button onclick="openSummarySheet()" class="btn2 w-full !py-2.5 text-sm">Prepare appointment summary →</button>
+      <p class="text-xs text-slate-500">Choose a date range, review exactly what is included (private notes excluded by default), then print or download. Nothing is sent anywhere.</p>
+    </div>
+  </section>
+
+  <!-- CATALOG / LEARN -->
+  <section id="sec-catalog" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">Catalog <span class="text-xs text-slate-400 font-normal">— sourced regulatory status only, no recommendations</span></h2>
+      <input id="cat-q" class="inp" placeholder="Search catalog (aliases work, e.g. HGH)…">
+      <div id="catalog-list" class="space-y-3"></div>
+      <div id="verify-result"></div>
+      <details class="text-sm"><summary class="text-emerald-400 underline">What "regulatory status" means — Learn more</summary>
+        <ul class="text-sm text-slate-300 space-y-2 list-disc pl-5 pt-2 leading-relaxed">
+          <li><strong>"Approved products exist"</strong> is an ingredient-level statement: FDA-approved prescription products exist for this ingredient, but approval applies only to those <em>specific products</em>. Other versions — compounded and "research" versions of the same molecule — are <strong>not</strong> approved.</li>
+          <li><strong>"No FDA-approved product"</strong> means no FDA-approved human use exists for that ingredient at all.</li>
+          <li>Approval is checked per <strong>exact product</strong> in <a class="text-emerald-400 underline" href="https://www.accessdata.fda.gov/scripts/cder/daf/" target="_blank" rel="noopener">Drugs@FDA</a> — never per ingredient. DailyMed is for labeling; it also lists products that are not FDA-approved.</li>
+          <li>"Source verified" means the app's developer checked the cited official page on the review date — <strong>not qualified clinical review</strong>, never implying safety or endorsement.</li>
+        </ul>
+      </details>
+      <details class="text-sm"><summary class="text-emerald-400 underline">If you feel unwell — Learn more</summary>
+        <p class="pt-2 text-slate-300 leading-relaxed">Severe symptoms — trouble breathing, swelling of face/throat, chest pain, fainting, rapidly worsening reactions — need <strong>emergency medical care immediately</strong>. Show clinicians exactly what you took (your export file is designed for that). For anything milder but persistent, log it and raise it with a licensed healthcare provider.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="sec-settings" class="hidden space-y-4">
+    <div class="card p-6 space-y-4">
+      <h2 class="text-2xl font-black">Settings <span id="app-version" class="text-xs text-slate-500 font-normal"></span></h2>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Profiles</h3>
+        <div class="flex gap-2">
+          <select id="profile-select" class="inp"></select>
+          <button onclick="deleteProfile()" class="btn2 !py-2 whitespace-nowrap text-xs">Delete profile</button>
+        </div>
+        <form onsubmit="createProfile(event)" class="flex gap-2">
+          <input id="add-profile-name" name="pname" class="inp" placeholder="New profile name" maxlength="40">
+          <button class="btn !py-2 whitespace-nowrap text-xs">Add</button>
+        </form>
+        <p class="text-xs text-slate-500">Profiles are not authentication — anyone who can use this device can open any profile.</p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Tracking goals <span class="text-xs text-slate-400 font-normal">(customize your journal — not medication recommendations)</span></h3>
+        <p id="settings-goal-note" class="text-xs text-slate-400"></p>
+        <div id="goal-chips" class="flex flex-wrap gap-2"></div>
+        <p id="height-goal-note" class="hidden text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Growth hormone &amp; height:</strong> "Growth hormone is not a general height enhancer. Once growth plates have fused, HGH does not increase height." (<a class="underline" href="https://my.clevelandclinic.org/health/articles/23309-human-growth-hormone-hgh" target="_blank" rel="noopener">Cleveland Clinic</a>) — this app never estimates growth potential.</p>
+        <p class="text-xs text-slate-500">Goal measurements are recorded in Observations, never on doses.</p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Reminders <span class="text-xs text-slate-400 font-normal">(in-app only)</span></h3>
+        <form id="reminder-form" onsubmit="addReminder(event)" class="space-y-2">
+          <div class="picker-wrap"><input id="r-name" class="inp" placeholder="Product name" maxlength="80"><div id="r-name-dd" class="picker-list hidden"></div></div>
+          <div class="flex gap-2">
+            <input id="r-time" type="time" class="inp">
+            <input id="r-days" class="inp" value="Every day" title="e.g. Mon,Wed,Fri or Every day">
+          </div>
+          <input id="r-notes" class="inp" placeholder="Notes (optional)">
+          <button class="btn2 w-full !py-2 text-xs">Add reminder</button>
+        </form>
+        <div id="reminders-list" class="space-y-2"></div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Vial log <span class="text-xs text-slate-400 font-normal">(your own supply records)</span></h3>
+        <p class="text-xs text-slate-500">Record when you mixed a vial and the discard date <strong>you</strong> choose. The app stores and displays only what you enter — it does not calculate stability, recommend dates, or advise any use.</p>
+        <form id="vial-form" onsubmit="addVial(event)" class="space-y-2">
+          <div class="picker-wrap"><input id="v-name" class="inp" placeholder="Product name" maxlength="80" autocomplete="off"><div id="v-name-dd" class="picker-list hidden"></div></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs text-slate-400 mb-1">Date mixed</label>
+              <input id="v-mixed" type="date" class="inp"></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Discard date (your choice)</label>
+              <input id="v-discard" type="date" class="inp"></div>
+          </div>
+          <input id="v-notes" class="inp" placeholder="Notes (optional)" maxlength="200">
+          <div class="err" id="v-error"></div>
+          <button class="btn2 w-full !py-2 text-xs">Add vial record</button>
+        </form>
+        <div id="vials-list" class="space-y-2"></div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Export &amp; restore</h3>
+        <p id="last-backup" class="text-xs text-emerald-300"></p>
+        <p id="backup-reminder" class="hidden text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2"></p>
+        <button onclick="dismissBackupReminder()" id="backup-dismiss" class="hidden text-xs text-slate-400 underline">Dismiss reminder for a week</button>
+        <p class="text-xs text-slate-400">Backup saves a JSON copy of <strong>every profile</strong> on this device. Keep the file private — it contains your health journal.</p>
+        <button onclick="exportData()" class="btn"><span>Download full backup (JSON)</span></button>
+        <div class="space-y-2">
+          <label class="text-xs text-slate-400 block">Import / restore a previously exported file:</label>
+          <input id="import-file" type="file" accept="application/json,.json" class="text-xs text-slate-400">
+          <div id="import-preview" class="hidden"></div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Install on this device</h3>
+        <details class="text-xs text-slate-400"><summary class="underline">How to install — Learn more</summary>
+          <ul class="list-disc pl-4 pt-1 space-y-1 leading-relaxed">
+            <li><strong>Android (Chrome):</strong> browser menu → <em>Add to Home screen</em> / <em>Install app</em>.</li>
+            <li><strong>iPhone/iPad (Safari):</strong> Share button → <em>Add to Home Screen</em>.</li>
+            <li><strong>Desktop (Chrome/Edge):</strong> install icon in the address bar, or menu → <em>Install app</em>.</li>
+          </ul>
+          <p class="pt-1 leading-relaxed"><strong>Offline limitations:</strong> once installed, the app opens and works with no connection — records are on the device. Reminders still only appear while the app is open. Updates are fetched when you're next online (you'll see an "Update available" note; updating only reloads when you choose, and your records plus any open draft are preserved).</p>
+        </details>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Feedback &amp; problems</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">Tell the developer what got stuck, what you expected, and what felt unnecessary. The app itself has no built-in sending — you choose where to send feedback. <strong>Feedback route:</strong> the app's public issue tracker on GitHub <a href="https://github.com/kinitiyaan-commits/peptide-safety-tracker/issues" class="text-emerald-400 underline" target="_blank" rel="noopener">github.com/kinitiyaan-commits/peptide-safety-tracker/issues</a>.</p>
+        <p class="text-xs text-amber-200 bg-amber-950/40 border border-amber-900/60 rounded-lg px-3 py-2 leading-relaxed"><strong>Privacy warning:</strong> if feedback goes to a public issue tracker, everything you post is <strong>public</strong>. Do <strong>not</strong> include medical records, symptom details, product names tied to you, exports, or screenshots of your entries. The app never attaches data to feedback automatically — there is no such feature — so anything you share is only what you type yourself.</p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-emerald-300">Where your data lives</h3>
+        <p id="storage-note" class="text-sm text-slate-300 leading-relaxed"></p>
+        <details class="text-xs text-slate-400"><summary class="underline">Learn more</summary>
+          <p class="pt-1 leading-relaxed">Your saved records are stored in this browser's IndexedDB on this device; an entry you haven't saved yet may sit in this tab's sessionStorage until the tab closes. No server receives them. Clearing the browser's site data (or uninstalling the installed app) deletes every record permanently.</p>
+          <p class="pt-1 leading-relaxed">A backup file includes <strong>every profile on this device</strong>, not just the one you have open — keep the file private.</p>
+          <p class="pt-1 leading-relaxed">The app is hosted on GitHub Pages: when the app shell loads, GitHub receives your IP address and standard web-server logs, as with any website. The app also makes no other requests except the official-source links <strong>you</strong> choose to open — those links include the product name you're checking, which the sites' operators can see. No other personal data leaves this device.</p>
+          <p class="pt-1"><a href="./privacy.html" class="text-emerald-400 underline">Full privacy notice</a> · <a href="./terms.html" class="text-emerald-400 underline">Terms of use</a></p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- FAB chooser -->
+<div id="fab-chooser" class="hidden fixed inset-0 bg-black/80 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this)closeFabChooser()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 space-y-2">
+    <p class="text-xs text-slate-400 text-center pb-1">What are you logging?</p>
+    <button onclick="closeFabChooser();openLogSheet()" class="btn w-full !py-3.5">A dose (administration)</button>
+    <button onclick="closeFabChooser();openObservationSheet()" class="btn2 w-full !py-3.5">An observation (no dose)</button>
+    <button onclick="closeFabChooser();openSymptomSheet()" class="btn2 w-full !py-3.5">A symptom</button>
+    <button onclick="closeFabChooser()" class="w-full text-center text-xs text-slate-400 py-2 underline">Cancel</button>
+  </div>
+</div>
+
+<!-- LOG DOSE -->
+<div id="log-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeLogSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5">
+    <div class="flex justify-between items-center pb-2">
+      <h3 id="log-sheet-title" class="font-bold">Log a dose</h3>
+      <button onclick="closeLogSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logUsage(event)" class="space-y-3">
+      <div class="picker-wrap"><label class="block text-xs text-slate-400 mb-1">Product / peptide</label>
+        <input id="u-name" class="inp" placeholder="Type to search the catalog…" maxlength="80" autocomplete="off">
+        <div id="u-name-dd" class="picker-list hidden"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-xs text-slate-400 mb-1">Amount</label>
+          <input id="u-amount" type="number" step="any" min="0" class="inp" inputmode="decimal"></div>
+        <div><label class="block text-xs text-slate-400 mb-1">Unit</label>
+          <select id="u-unit" class="inp"><option value="">Choose unit</option><option>mcg</option><option>mg</option><option>IU</option><option>units</option><option>mL</option></select>
+          <p id="u-unit-hint" class="hidden text-[.7rem] text-emerald-300 pt-0.5"></p></div>
+      </div>
+      <p id="u-equiv" class="hidden text-[.7rem] text-emerald-300">Same amount in both units — an extra or missing zero stands out here.</p>
+      <div><label class="block text-xs text-slate-400 mb-1">When</label>
+        <input id="u-when" type="datetime-local" class="inp"></div>
+      <p id="u-dup-hint" class="hidden text-[.7rem] text-amber-300"></p>
+      <div><label class="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+        <input id="u-notes" class="inp" placeholder="Anything worth remembering" maxlength="300"></div>
+      <div class="err" id="u-error"></div>
+      <button class="btn w-full !py-3" id="u-submit"><span id="u-submit-label">Save entry</span></button>
+    </form>
+  </div>
+</div>
+
+<!-- SYMPTOM -->
+<div id="symptom-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeSymptomSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5">
+    <div class="flex justify-between items-center pb-2">
+      <h3 class="font-bold">Log a symptom</h3>
+      <button onclick="closeSymptomSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logSymptom(event)" class="space-y-3">
+      <div><label class="block text-xs text-slate-400 mb-1">Symptom name</label>
+        <input id="s-name" class="inp" placeholder="e.g. headache" maxlength="80"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Description</label>
+        <input id="s-desc" class="inp" placeholder="What did you feel?" maxlength="500"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Severity (1 = mild … 5 = severe)</label>
+        <select id="s-severity" class="inp"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+      <div class="err" id="s-error"></div>
+      <button class="btn w-full !py-3">Save symptom</button>
+    </form>
+  </div>
+</div>
+
+<!-- OBSERVATION -->
+<div id="observation-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeObservationSheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
+    <div class="flex justify-between items-center pb-2">
+      <h3 class="font-bold">Log an observation</h3>
+      <button onclick="closeObservationSheet()" class="text-slate-400 text-xl">×</button>
+    </div>
+    <form onsubmit="logObservation(event)" class="space-y-3">
+      <div><label class="block text-xs text-slate-400 mb-1">When</label>
+        <input id="o-when" type="datetime-local" class="inp"></div>
+      <div><label class="block text-xs text-slate-400 mb-1">Notes (optional)</label>
+        <input id="o-notes" class="inp" placeholder="Anything worth remembering" maxlength="300"></div>
+      <div id="observation-fields" class="space-y-3"></div>
+      <details id="training-context" class="mt-1">
+        <summary class="text-sm text-sky-400 underline">Training context (optional)</summary>
+        <div id="training-fields" class="space-y-3 pt-2">
+          <p class="text-xs text-slate-500">Your own training notes for your records — kept separate from dose logging. The app draws no connection between training and any product.</p>
+          <div><label class="block text-xs text-slate-400 mb-1">Session type</label>
+            <input class="inp gf" data-gkey="tc_session_type" maxlength="60" placeholder="e.g. strength, cardio, mobility — your words"></div>
+          <div><label class="block text-xs text-slate-400 mb-1">Muscles trained</label>
+            <input class="inp gf" data-gkey="tc_muscles" maxlength="120" placeholder="optional — e.g. legs, back"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div><label class="block text-xs text-slate-400 mb-1">Perceived session effort</label>
+              <select class="inp gf" data-gkey="tc_effort"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+              <p class="text-xs text-slate-500 pt-0.5">Your own rating, 1 (easy) – 5 (maximal)</p></div>
+            <div><label class="block text-xs text-slate-400 mb-1">Soreness afterwards</label>
+              <select class="inp gf" data-gkey="tc_soreness"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+              <p class="text-xs text-slate-500 pt-0.5">Your own rating, 1 (none) – 5 (very sore)</p></div>
+          </div>
+          <div><label class="block text-xs text-slate-400 mb-1">Note (private)</label>
+            <input class="inp gf" data-gkey="tc_note" maxlength="300" placeholder="Stays out of appointment summaries unless you include notes"></div>
+        </div>
+      </details>
+      <div class="err" id="o-error"></div>
+      <button class="btn w-full !py-3">Save observation</button>
+    </form>
+  </div>
+</div>
+
+<!-- APPOINTMENT SUMMARY -->
+<div id="summary-sheet" class="hidden fixed inset-0 bg-black/80 z-[70] flex items-end sm:items-center justify-center" onclick="if(event.target===this)closeSummarySheet()">
+  <div class="bg-slate-900 border border-slate-800 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto space-y-3">
+    <div class="flex justify-between items-center pb-1">
+      <h3 class="font-bold">Appointment summary</h3>
+      <button onclick="closeSummarySheet()" class="text-slate-400 text-xl" aria-label="Close summary">×</button>
+    </div>
+    <p class="text-xs text-slate-400">Pick the period, review <strong>exactly</strong> what will be shared, then print or download it yourself. Nothing is sent anywhere automatically.</p>
+    <div class="flex gap-2 items-center flex-wrap">
+      <label class="text-xs text-slate-400" for="sum-from">From</label>
+      <input id="sum-from" type="date" class="inp !w-auto" onchange="renderSummaryPreview()">
+      <label class="text-xs text-slate-400" for="sum-to">to</label>
+      <input id="sum-to" type="date" class="inp !w-auto" onchange="renderSummaryPreview()">
+    </div>
+    <label class="flex items-start gap-2 text-sm text-slate-300 cursor-pointer">
+      <input id="sum-notes" type="checkbox" class="mt-1 w-4 h-4 accent-emerald-500" onchange="renderSummaryPreview()">
+      <span>Include private notes <span class="text-xs text-slate-500">(excluded by default)</span></span>
+    </label>
+    <div>
+      <label class="block text-xs text-slate-400 mb-1" for="sum-questions">Questions I want to ask my clinician (optional, your words)</label>
+      <textarea id="sum-questions" rows="3" class="inp" maxlength="2000" oninput="renderSummaryPreview()"></textarea>
+    </div>
+    <div id="sum-preview"></div>
+    <div class="flex gap-2">
+      <button onclick="printSummary()" class="btn flex-1 !py-2.5 text-sm">Print</button>
+      <button onclick="downloadSummary()" class="btn2 flex-1 !py-2.5 text-sm">Download (.html)</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<!-- bottom nav + FAB -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/97 border-t border-slate-800 backdrop-blur flex items-center px-2 py-1" style="padding-bottom:max(0.25rem, env(safe-area-inset-bottom))">
+  <button id="nav-today" onclick="gotoTab('today')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-emerald-400">Today</button>
+  <button id="nav-history" onclick="gotoTab('history')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">History</button>
+  <div class="flex-1 flex justify-center"><button class="fab" onclick="openFabChooser()" title="Log something" aria-label="Log something">+</button></div>
+  <button id="nav-catalog" onclick="gotoTab('catalog')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">Catalog</button>
+  <button id="nav-settings" onclick="gotoTab('settings')" class="flex-1 flex flex-col items-center gap-0.5 py-2 text-[.7rem] font-semibold text-slate-500">Settings</button>
+</nav>
+
+<script src="./data.js"></script>
+<script src="./store.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

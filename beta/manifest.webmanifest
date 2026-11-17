@@ -1,0 +1,26 @@
+{
+  "name": "Peptide Safety Tracker (Beta)",
+  "short_name": "PeptideLog",
+  "description": "Local-first journal for peptide use, symptoms, and observations. Not medical advice; records what you enter only.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#059669",
+  "categories": ["health", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

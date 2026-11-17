@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy notice — Peptide Safety Tracker</title>
+<link rel="stylesheet" href="./styles.css">
+<style>
+  body{background:#020617;color:#cbd5e1;font-family:system-ui,sans-serif;margin:0;padding:1.5rem;line-height:1.6}
+  main{max-width:46rem;margin:0 auto}
+  h1{color:#fff;font-size:1.5rem} h2{color:#6ee7b7;font-size:1.05rem;margin-top:1.5rem}
+  a{color:#34d399}
+  .note{border:1px solid rgba(120,53,15,.6);background:rgba(69,26,3,.4);color:#fde68a;padding:.75rem 1rem;border-radius:.5rem;font-size:.85rem}
+  .muted{color:#94a3b8;font-size:.8rem}
+  .back{display:inline-block;margin-top:1.5rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Privacy notice</h1>
+<p class="note"><strong>Draft pending owner approval before deployment.</strong>
+The structure of this notice (operator published under a public handle; GitHub
+Issues for feedback; a separate private security/privacy contact) is
+owner-approved. Items still marked <span>[OWNER TO SUPPLY]</span> await the
+owner's literal values. This page has not had legal review.</p>
+
+<h2>The short version</h2>
+<p>This is a personal journal app. Everything you type — profiles, doses,
+symptoms, observations, reminders — is stored only in your browser on your
+device. Saved records live in IndexedDB. An entry you have not saved yet
+can be held temporarily in the browser's per-tab sessionStorage (so an
+unfinished form can survive an app update) — it stays in this tab on this
+device and is gone when the tab closes. The app does not send your records
+anywhere. There is no account, no server database, and no analytics.</p>
+
+<h2>What does leave your device</h2>
+<ul>
+  <li><strong>Loading the app:</strong> the site is hosted on GitHub Pages.
+  When your browser loads the app shell, GitHub receives your IP address and
+  keeps standard web-server logs, as with any website. The app's operator
+  does not control those logs.</li>
+  <li><strong>Links you choose to open:</strong> verification links to
+  official sources (DailyMed, Drugs@FDA, FDA pages). These links include the
+  product name you are checking in their address — the operators of those
+  sites can see that search term. No other personal data is included.</li>
+  <li><strong>Exports and summaries:</strong> only when you choose Export or
+  print/download an appointment summary. The file is created in your browser
+  and saved where you choose; the app does not transmit it anywhere. Once a
+  file is downloaded, shared, or moved (for example to a clinician, a chat
+  app, or cloud storage), the app no longer controls it — treat exported
+  health records accordingly.</li>
+</ul>
+
+<h2>What never happens</h2>
+<ul>
+  <li>The app never uploads, syncs, or shares your records. There is no
+  third-party transmission of user data.</li>
+  <li>The app never attaches data to feedback automatically — there is no
+  such feature.</li>
+  <li>Data leaves the machine only when you explicitly export it. A backup
+  file includes <strong>every profile stored on this device</strong>, not
+  only the profile currently open — keep it accordingly private.</li>
+</ul>
+
+<h2>Who can see your data on this device</h2>
+<p>Profiles organize records; they are not passwords. Anyone who can use this
+device and this browser profile can open every profile in the app, including
+exports and summaries stored on the device. Clearing the browser's site data
+for this app deletes every record permanently.</p>
+
+<h2>Children</h2>
+<p>This app is intended for adults organizing existing treatment or use
+records. It is not marketed to minors, and it does not direct
+appearance-enhancing or growth-related content to children.</p>
+
+<h2>Feedback</h2>
+<p>Feedback and problem reports go to the app's public issue tracker:
+<a href="https://github.com/kinitiyaan-commits/peptide-safety-tracker/issues">GitHub
+Issues on this repository</a>. <strong>Issues are public</strong> — do not
+include medical records, symptom details, product names tied to you, export
+files, or screenshots of your entries. The app never attaches data to
+feedback automatically — there is no such feature — so anything you share is
+only what you type yourself.</p>
+
+<h2>Contact</h2>
+<p>Operator: the app is operated by its independent developer, published
+under a public handle (a personal name is not published). The handle is:
+<span>[OWNER TO SUPPLY — public handle]</span>.</p>
+<p>Security and privacy reports (for example a suspected data-loss or
+security defect): <span>[OWNER TO SUPPLY — private email the owner
+controls]</span>. Please use that route for security reports rather than a
+public issue.</p>
+
+<h2>Changes to this notice</h2>
+<p>Material changes will be described in this page's history in the app's
+public source repository.</p>
+
+<p class="muted">This notice describes the app's behavior as built; it is not
+legal advice. Last updated: 2026-11-15.</p>
+<a class="back" href="./index.html">← Back to the app</a>
+</main>
+</body>
+</html>

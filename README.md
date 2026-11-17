@@ -110,3 +110,17 @@ FDA-approved; compounded copies carry FDA-documented risks. The app records
 what you enter, never recommends doses, and never rates brands as safe or
 unsafe. Verify anything important with official sources and a licensed
 clinician.
+
+## `pages-beta` branch — optional beta preview deployment
+
+This branch exists only as a possible GitHub Pages source for a beta
+preview. Its root is **byte-identical to `main`** (the production site
+served today), so pointing Pages at this branch changes nothing at the
+existing URLs. The beta / feedback version of the app is served from the
+`/beta/` subdirectory of this branch (e.g.
+`https://<account>.github.io/peptide-safety-tracker/beta/`) and is clearly
+labeled BETA. The beta contains `[OWNER TO SUPPLY]` placeholders in its
+privacy/terms pages — no operator details are invented. Switching the
+Pages source to this branch is an explicit owner action in
+Settings → Pages; nothing here deploys automatically and `main` is never
+merged or changed by this branch.
