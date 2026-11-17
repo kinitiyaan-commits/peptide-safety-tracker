@@ -5,6 +5,20 @@ personal observations — with neutral, sourced regulatory reference
 information. **This app is not medical advice.** It records what you enter,
 never recommends doses, and never rates brands as safe or unsafe.
 
+## Beta / feedback version (this branch)
+
+> **`feature/beta-now` is a beta prototype for feedback — not the production
+> release.** The production app lives on `main` and is what GitHub Pages
+> serves today. This branch is labeled "BETA" in the app header, shows a
+> beta banner on every screen, and exists to collect feedback before the
+> production release. Everything is still local-first: your data stays in
+> your browser on your device — no account, no server, no analytics. Do not
+> enter real health records in the beta if you are not comfortable with
+> that; synthetic/demo entries are enough for feedback. The public-facing
+> pages (`privacy.html`, `terms.html`) may still contain marked
+> `[OWNER TO SUPPLY]` placeholders — final operator/contact details are
+> pending and are not invented.
+
 Two deliverables live in this repository:
 
 | Deliverable | Location | Storage |

@@ -1,5 +1,5 @@
 {
-  "name": "Peptide Safety Tracker",
+  "name": "Peptide Safety Tracker (Beta)",
   "short_name": "PeptideLog",
   "description": "Local-first journal for peptide use, symptoms, and observations. Not medical advice; records what you enter only.",
   "start_url": "./",

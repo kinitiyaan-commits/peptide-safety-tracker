@@ -878,3 +878,32 @@ class TestDarkThemeConsistency:
         nav = html.split("<nav", 1)[1].split("</nav>", 1)[0]
         for btn in ("nav-today", "nav-history", "nav-catalog", "nav-settings"):
             assert btn in nav
+
+
+# ---------------- beta / feedback labeling (2026-11-16) ----------------
+
+class TestBetaLabeling:
+    def test_header_beta_chip_and_banner(self):
+        html = (PWA / "index.html").read_text()
+        assert ">BETA</span>" in html
+        assert 'id="beta-banner"' in html
+        assert "not the production release" in html
+
+    def test_version_string_says_feedback_preview(self):
+        app = (PWA / "app.js").read_text()
+        assert "feedback preview" in app and "not the production release" in app
+
+    def test_manifest_beta_name(self):
+        text = (PWA / "manifest.webmanifest").read_text()
+        assert '"Peptide Safety Tracker (Beta)"' in text
+
+    def test_readme_beta_note(self):
+        text = (ROOT / "README.md").read_text()
+        assert "beta prototype for feedback" in text
+        assert "not the production" in text
+        assert "[OWNER TO SUPPLY]" in text       # placeholders not invented
+
+    def test_placeholder_values_untouched(self):
+        for f in ("privacy.html", "terms.html"):
+            text = (PWA / f).read_text()
+            assert "[OWNER TO SUPPLY" in text    # still awaiting real values

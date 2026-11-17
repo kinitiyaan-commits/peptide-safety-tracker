@@ -17,7 +17,7 @@
  */
 
 const CACHE_PREFIX = "peptide-safety-static-";
-const CACHE = CACHE_PREFIX + "v8";
+const CACHE = CACHE_PREFIX + "v9";
 const ASSETS = [
   "./",
   "./index.html",

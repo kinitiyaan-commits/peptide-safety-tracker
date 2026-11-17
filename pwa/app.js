@@ -1284,7 +1284,7 @@ async function dismissBackupReminder() {
   $("#backup-reminder").classList.add("hidden");
 }
 
-const APP_VERSION = "pwa 0.2.0-beta";
+const APP_VERSION = "pwa 0.2.0-beta (feedback preview — not the production release)";
 
 async function createProfile(ev) {
   ev.preventDefault();
